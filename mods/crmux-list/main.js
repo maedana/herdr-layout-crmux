@@ -17,6 +17,7 @@ import {
   markPrefix,
 } from "./tabs.js";
 import { parseNumstat, diffSummary, diffTargets, diffKey } from "./diff.js";
+import { normalKey, scrollKey, scrollStep, scrollView } from "./keys.js";
 
 const LAYOUT = "crmux";
 const DEFAULT_ARRANGE = "MainV";
@@ -29,13 +30,6 @@ const REFOCUS_AFTER_MS = [16, 150];
 // Pulse for waiting-for-input / just-finished (crmux swings the border between 50-100% with sin(t*16), a period of about 0.4s)
 const PULSE = { from: 0.5, to: 1, period: 400 };
 const EMOJI_FONT = "Noto Color Emoji";
-// Normal mode key -> act() name (crmux event_handler.rs handle_normal_mode)
-const KEYS = {
-  j: "down", down: "down", k: "up", up: "up", t: "toggle", i: "insert", v: "arrange", q: "main",
-  h: "tab-prev", left: "tab-prev", l: "tab-next", right: "tab-next", space: "mark",
-  escape: "esc",
-};
-const CTRL_KEYS = { u: "scroll-up", d: "scroll-down" };
 // Interval to refresh the git diff summary (5 seconds, same as crmux app.rs)
 const DIFF_MS = 5000;
 // List width (the layout's list block) and the width of one character used to estimate tab bar characters (half-width of a 12px monospace font)
@@ -56,6 +50,8 @@ export default class CrmuxList extends View {
     this.lastEscAt = 0;
     this.gAt = 0;
     this.scrolledTo = null;
+    // Lines the selected preview is scrolled up (Scroll mode while > 0)
+    this.scrollUp = 0;
     this.tickSig = "";
     this.width = LIST_PX;
     // git diff summary: diffKey(machine, cwd) -> diffSummary result (kept only inside the mod)
@@ -153,6 +149,8 @@ export default class CrmuxList extends View {
     const sel = this.selected(list);
     const at = Math.max(0, list.indexOf(sel));
     const select = /^select-([1-9])$/.exec(name);
+    // Leaving Scroll mode with i puts the preview back at the bottom (crmux reset_preview_scroll)
+    if (name === "insert" && this.scrolling()) this.scrollPreview(sel, "bottom");
     if (name === "down") this.select(list[cycle(at, 1, list.length)]);
     else if (name === "up") this.select(list[cycle(at, -1, list.length)]);
     else if (select) this.select(list[Number(select[1]) - 1]);
@@ -160,10 +158,7 @@ export default class CrmuxList extends View {
     else if (name === "insert") this.toInsert();
     else if (name === "arrange") this.setArrange(nextArrange(this.arrange()));
     else if (name === "main") this.switchToMain(sel);
-    else if (name === "scroll-up") this.scrollPreview(sel, { pages: -0.5 });
-    else if (name === "scroll-down") this.scrollPreview(sel, { pages: 0.5 });
-    else if (name === "top") this.scrollPreview(sel, { to: "top" });
-    else if (name === "bottom") this.scrollPreview(sel, { to: "bottom" });
+    else if (/^(scroll-up|scroll-down|line-up|line-down|top|bottom)$/.test(name)) this.scrollPreview(sel, name);
     else if (name === "esc") this.esc();
     else if (name === "mark") this.markSelected(sel);
     else if (name === "tab-next") this.switchTab(1, sel);
@@ -174,6 +169,8 @@ export default class CrmuxList extends View {
     const list = this.addresses();
     const cur = this.selected(list);
     if (!address || address === cur || !list.includes(address)) return;
+    // Selecting another one (e.g. by clicking a card) leaves Scroll mode (crmux resets the scroll on selection)
+    if (this.scrolling()) this.scrollPreview(cur, "bottom");
     setShared("crmux.prev", cur);
     this.focusAgent(address);
   }
@@ -265,6 +262,8 @@ export default class CrmuxList extends View {
     if (now - this.lastEscAt < 100) return;
     this.lastEscAt = now;
     const sel = this.selected();
+    // Esc in Scroll mode: back to the bottom and Normal
+    if (this.scrolling()) return this.scrollPreview(sel, "bottom");
     if (!sel || now - this.escFromInsertAt > ESC_FORWARD_MS) return;
     this.escFromInsertAt = 0;
     hc(["keys", sel, "esc", "esc"]).catch(() => {});
@@ -277,8 +276,20 @@ export default class CrmuxList extends View {
     if (a) run("pane.focus", { pane: a.pane });
   }
 
-  scrollPreview(sel, args) {
-    if (sel) run("terminal.scroll", { terminal: sel, ...args });
+  // --- Scroll mode (crmux InputMode::Scroll) ---
+
+  scrolling() {
+    return shared("crmux.mode") === "scroll";
+  }
+
+  // Scrolling up enters Scroll mode and coming back to the bottom returns to Normal (crmux handle_scroll_mode)
+  scrollPreview(sel, name) {
+    if (!sel) return;
+    const pane = this.items().find((a) => a.address === sel)?.pane;
+    const step = scrollStep(name, this.scrollUp, scrollView(panes(), pane));
+    this.scrollUp = step.up;
+    run("terminal.scroll", { terminal: sel, ...step.args });
+    setShared("crmux.mode", step.up > 0 ? "scroll" : "normal");
   }
 
   // Normal mode keys (delivered only when the list has focus)
@@ -295,8 +306,7 @@ export default class CrmuxList extends View {
     const plainG = k === "g" && !m.shift && !m.control;
     const gg = plainG && Date.now() - this.gAt < GG_MS;
     this.gAt = plainG && !gg ? Date.now() : 0;
-    const name = m.control ? CTRL_KEYS[k] : (k === "G" || (k === "g" && m.shift)) ? "bottom" : m.shift ? null
-      : gg ? "top" : /^[1-9]$/.test(k) ? `select-${k}` : KEYS[k];
+    const name = (this.scrolling() ? scrollKey : normalKey)(k, m, gg);
     if (!name && !plainG) return;
     if (name) this.act(name);
     cx.stop_propagation();
@@ -426,9 +436,9 @@ export default class CrmuxList extends View {
     const now = Date.now();
     setAgentOrder(v.all.map((a) => a.address));
     const at = list.indexOf(sel);
-    const scrollKey = `${tabLabel(v.tab)}:${at}`;
-    if (at >= 0 && scrollKey !== this.scrolledTo) {
-      this.scrolledTo = scrollKey;
+    const listAt = `${tabLabel(v.tab)}:${at}`;
+    if (at >= 0 && listAt !== this.scrolledTo) {
+      this.scrolledTo = listAt;
       this.scroll.scroll_to_item(at);
     }
     return v_flex().id("crmux-list").track_focus(this.handle).size_full().min_h(0)
@@ -443,7 +453,7 @@ export default class CrmuxList extends View {
       .on_mouse_down("left", (_e, cx) => {
         // A click on the list's margin also returns to Normal (window_drag still works as is)
         this.insert = false;
-        setShared("crmux.mode", "normal");
+        if (!this.scrolling()) setShared("crmux.mode", "normal");
         this.handle.focus();
         cx.notify();
       })

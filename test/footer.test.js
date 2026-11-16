@@ -15,6 +15,12 @@ test("Insert: -- INSERT -- in bold, showing that Esc goes back", () => {
   assert.deepEqual(parts[0], { text: "-- INSERT --", bold: true });
 });
 
+test("Scroll: -- SCROLL -- in bold with the scroll keys (crmux footer_spans InputMode::Scroll)", () => {
+  const parts = footerParts("scroll", "Grid");
+  assert.equal(text(parts), "-- SCROLL -- | j/k:Line C-u/C-d:HalfPage gg:Top G:Bottom i:Insert Esc:Back");
+  assert.deepEqual(parts[0], { text: "-- SCROLL --", bold: true });
+});
+
 test("show as Normal when the mode is unknown", () => {
   assert.equal(text(footerParts(undefined, "MainV")), text(footerParts("normal", "MainV")));
 });

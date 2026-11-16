@@ -41,17 +41,29 @@ Normal (the list has the keyboard):
 | `Space` | mark / unmark the selected agent (unmarking the last one on the `Marked` tab goes back to `All`) |
 | `i` | Insert: move the keyboard to the selected agent's terminal |
 | `v` | next arrangement |
-| `ctrl-u` / `ctrl-d` | scroll the preview half a page up / down |
-| `g g` / `G` | scroll the preview to top / bottom |
+| `ctrl-u` / `g g` | scroll the preview half a page up / to the top and enter Scroll |
+| `ctrl-d` / `G` | scroll the preview half a page down / to the bottom |
 | `q` | switch to the `main` layout and focus the agent's pane |
 | `Esc` | right after leaving Insert: send `Esc Esc` to the agent and go back to Insert |
+
+Scroll (the preview is scrolled up; `-- SCROLL --` in the footer):
+
+| Key | Action |
+|---|---|
+| `j` / `↓`, `k` / `↑` | scroll the preview one line down / up (reaching the bottom returns to Normal) |
+| `ctrl-u` / `ctrl-d` | scroll the preview half a page up / down (reaching the bottom returns to Normal) |
+| `g g` / `G` | scroll the preview to the top / to the bottom and back to Normal |
+| `i` | back to the bottom and Insert |
+| `Esc` | back to the bottom and Normal |
+
+Other keys do nothing in Scroll. Selecting another agent (e.g. clicking a card) also puts the preview back at the bottom.
 
 Insert (a terminal has the keyboard): `Esc` returns to Normal (needs the `keys.json` entry below).
 Plain `Esc` therefore no longer reaches the program in this layout; press `Esc` twice to send it.
 
 The same actions can be run from a shell while the layout is shown, e.g.
 `herdr-app do crmux-list.arrange`, `crmux-list.down`, `crmux-list.select-2`, `crmux-list.normal`,
-`crmux-list.mark`, `crmux-list.tab-next`, `crmux-list.tab-prev`.
+`crmux-list.mark`, `crmux-list.tab-next`, `crmux-list.tab-prev`, `crmux-list.scroll-up`, `crmux-list.line-down`.
 
 ## Install
 
