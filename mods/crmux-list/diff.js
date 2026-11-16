@@ -1,11 +1,11 @@
-// git diff 要約の純粋関数（crmux state.rs parse_numstat / ui.rs git_diff_line）
+// Pure functions for the git diff summary (crmux state.rs parse_numstat / ui.rs git_diff_line)
 
 const toInt = (s) => {
   const n = Number.parseInt(s, 10);
   return Number.isNaN(n) ? 0 : n;
 };
 
-// `git diff --numstat` の出力 → { files, ins, del }。バイナリ（"-\t-\t…"）はファイル数だけ数える
+// Output of `git diff --numstat` -> { files, ins, del }. Binary files ("-\t-\t...") count only toward the file count
 export function parseNumstat(text) {
   let files = 0;
   let ins = 0;
@@ -20,8 +20,8 @@ export function parseNumstat(text) {
   return { files, ins, del };
 }
 
-// カード下辺左の表示部品（crmux ui.rs git_diff_line）。color は役割名: add（緑）/ mod（黄）/ del（赤）/ dim（薄い色）。
-// staged / unstaged は parseNumstat の結果。staged が null（git リポジトリでない）なら null、unstaged の null は 0 扱い
+// Display parts for the card's bottom-left (crmux ui.rs git_diff_line). color is a role name: add (green) / mod (yellow) / del (red) / dim (faint).
+// staged / unstaged are parseNumstat results. null if staged is null (not a git repository); a null unstaged is treated as 0
 export function diffSummary(staged, unstaged) {
   if (!staged) return null;
   const u = unstaged ?? { files: 0, ins: 0, del: 0 };
@@ -39,10 +39,10 @@ export function diffSummary(staged, unstaged) {
   return parts;
 }
 
-// 結果を引くための key（マシン + cwd）
+// Key for looking up results (machine + cwd)
 export const diffKey = (machine, cwd) => `${machine ?? ""}\0${cwd}`;
 
-// git diff を取る先: 同じマシンの同じ cwd はまとめて 1 回。cwd が無ければ取らない
+// Targets to run git diff on: the same cwd on the same machine only once. Skipped when there is no cwd
 export function diffTargets(list) {
   const byKey = new Map();
   for (const { cwd, machine } of list) {

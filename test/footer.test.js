@@ -4,17 +4,17 @@ import { footerParts } from "../mods/crmux-footer/footer.js";
 
 const text = (parts) => parts.map((p) => p.text).join("");
 
-test("Normal: アプリ名とキーヒント（h/l のタブ切り替えと Space のマークを含む）、v には次の並べ方", () => {
+test("Normal: app name and key hints (including h/l tab switching and Space for marks), v shows the next arrangement", () => {
   assert.equal(text(footerParts("normal", "Single")),
     "crmux | hjkl/1-9/t:Nav C-u:ScrollUp Space:Mark v:Single i:Insert q:Main");
 });
 
-test("Insert: -- INSERT -- を太字で、Esc で戻ることを示す", () => {
+test("Insert: -- INSERT -- in bold, showing that Esc goes back", () => {
   const parts = footerParts("insert", "Grid");
   assert.equal(text(parts), "-- INSERT -- | Typing goes to the agent. Esc:Back");
   assert.deepEqual(parts[0], { text: "-- INSERT --", bold: true });
 });
 
-test("モードが分からなければ Normal として表示", () => {
+test("show as Normal when the mode is unknown", () => {
   assert.equal(text(footerParts(undefined, "MainV")), text(footerParts("normal", "MainV")));
 });

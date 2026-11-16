@@ -1,4 +1,4 @@
-// crmux layout の下端: モード表示とキーヒント。モードと次の並べ方は crmux-list が shared に置く
+// Bottom edge of the crmux layout: mode indicator and key hints. The mode and the next arrangement are placed in shared by crmux-list
 import { View, div } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { shared, theme, settings } from "herdr";

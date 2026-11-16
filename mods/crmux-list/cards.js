@@ -1,8 +1,8 @@
-// crmux-list の純粋関数（描画や herdr に依存しない）
+// Pure functions for crmux-list (no rendering, no herdr dependency)
 
 const pad2 = (n) => String(n).padStart(2);
 
-// 状態が変わってからの経過秒を crmux（ui.rs format_elapsed）と同じ書式にする: " 5s" / "12m" / " 3h"（上限 99h）
+// Format seconds since the last state change like crmux (ui.rs format_elapsed): " 5s" / "12m" / " 3h" (capped at 99h)
 export function formatElapsed(secs) {
   const s = Math.max(0, Math.floor(secs));
   if (s < 60) return `${pad2(s)}s`;
@@ -10,13 +10,13 @@ export function formatElapsed(secs) {
   return `${pad2(Math.min(99, Math.floor(s / 3600)))}h`;
 }
 
-// herdr の status（working / blocked / done / idle）を crmux の見た目の 3 状態にする。
-// done は「見ていない間に終わった」で、見れば idle になる。どちらも crmux の Idle。
+// Map herdr status (working / blocked / done / idle) to crmux's 3 visual states.
+// done means "finished while nobody was looking" and becomes idle once seen. Both are crmux Idle.
 export function statusKind(status) {
   return status === "working" || status === "blocked" ? status : "idle";
 }
 
-// 完了の点滅は crmux（ui.rs should_pulse）と同じく作業中を経験した後の 5〜15 秒だけ
+// Like crmux (ui.rs should_pulse), the completion pulse runs only 5-15 seconds after a working period
 export const PULSE_FROM_SECS = 5;
 export const PULSE_UNTIL_SECS = 15;
 
@@ -26,9 +26,9 @@ export function shouldPulse(status, elapsedSecs, hasWorked) {
   return kind === "idle" && hasWorked && elapsedSecs >= PULSE_FROM_SECS && elapsedSecs <= PULSE_UNTIL_SECS;
 }
 
-// 状態遷移の記録を更新する。records: { [address]: { kind, since, hasWorked } }。
-// list: [{ address, status, seenAt }]（seenAt: 初めて見るときに since とする時刻。null なら now）。
-// 何も変わらなければ records そのものを返す（呼び出し側は === で比べて shared への書き込みを省ける）。
+// Update the state-transition records. records: { [address]: { kind, since, hasWorked } }.
+// list: [{ address, status, seenAt }] (seenAt: the time used as since when first seen; null means now).
+// Returns records itself when nothing changed (callers can compare with === to skip writing to shared).
 export function trackStatuses(records, list, now) {
   const next = {};
   let changed = Object.keys(records).length !== list.length;
@@ -47,22 +47,22 @@ export function trackStatuses(records, list, now) {
   return changed ? next : records;
 }
 
-// project 名 = cwd の basename（crmux と同じく一覧の並びと見出しに使う）
+// Project name = basename of cwd (used for list order and headings, as in crmux)
 export function projectName(cwd) {
   if (!cwd) return "";
   const parts = cwd.split("/").filter(Boolean);
   return parts.length ? parts[parts.length - 1] : "/";
 }
 
-// project 名の昇順（crmux state.rs の sort_by）。同名は元の順（agents() の space, tab, pane 順）
+// Ascending by project name (crmux state.rs sort_by). Same names keep their original order (agents() space, tab, pane order)
 export function sortByProject(list) {
   return [...list].sort((a, b) => (a.project < b.project ? -1 : a.project > b.project ? 1 : 0));
 }
 
-// 番号キー 1〜9 で選べる数（crmux の MAX_NUMBER_KEYS）
+// Number of agents selectable with number keys 1-9 (crmux MAX_NUMBER_KEYS)
 export const MAX_NUMBER_KEYS = 9;
 
-// カード上辺の見出し: "> 1.project/branch"（crmux ui.rs format_title）
+// Card top-edge title: "> 1.project/branch" (crmux ui.rs format_title)
 export function cardLabel({ selected, index, project, branch }) {
   const number = index < MAX_NUMBER_KEYS ? `${index + 1}.` : "";
   return `${selected ? "> " : ""}${number}${project}${branch ? `/${branch}` : ""}`;
@@ -70,18 +70,18 @@ export function cardLabel({ selected, index, project, branch }) {
 
 const ICONS = { working: "⚡", blocked: "⚠", idle: "💤" };
 
-// カード下辺右の状態アイコン（crmux ui.rs state_label）
+// State icon at the right of the card's bottom edge (crmux ui.rs state_label)
 export function statusIcon(status) {
   return ICONS[statusKind(status)];
 }
 
-// i から delta 進めた位置（端で反対側へ回る）
+// Position delta steps from i (wraps around at the ends)
 export function cycle(i, delta, n) {
   if (n <= 0) return 0;
   return (((i + delta) % n) + n) % n;
 }
 
-// 選択中のアドレス: 覚えている選択 → herdr の focused agent → 先頭
+// Selected address: remembered selection -> herdr's focused agent -> first
 export function pickSelected(addresses, remembered, focusedAgent) {
   if (addresses.includes(remembered)) return remembered;
   if (addresses.includes(focusedAgent)) return focusedAgent;

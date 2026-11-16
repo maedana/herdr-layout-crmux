@@ -1,6 +1,6 @@
-// crmux 風のカード一覧（左）と Normal モードのキー処理。
-// 右のプレビューは layout の agent / terminal ブロック（本物のターミナル）で、並べ方は layout.set で差し替える。
-// layout の切り替えでこの mod は作り直されるので、残したい状態（選択・並べ方・状態遷移の記録・マーク・タブ）は shared に置く。
+// crmux-style card list (left) and Normal mode key handling.
+// The preview on the right is the layout's agent / terminal blocks (real terminals); the arrangement is swapped with layout.set.
+// Switching layouts recreates this mod, so state to keep (selection, arrangement, transition records, marks, tabs) lives in shared.
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex, ScrollHandle } from "gpui-base";
 import {
@@ -20,29 +20,29 @@ import { parseNumstat, diffSummary, diffTargets, diffKey } from "./diff.js";
 
 const LAYOUT = "crmux";
 const DEFAULT_ARRANGE = "MainV";
-// Insert から Esc で戻った直後の Esc（この時間内）は選択中のエージェントへ esc esc を送る
+// An Esc right after returning from Insert with Esc (within this time) sends esc esc to the selected agent
 const ESC_FORWARD_MS = 1500;
-// g g の 2 打鍵目を待つ時間
+// Time to wait for the 2nd keystroke of g g
 const GG_MS = 800;
-// 選択移動などでキーボードが右のブロックへ移ったとき、一覧へ取り直すまでの遅延（hop の switchTo と同じ）
+// Delay before reclaiming the keyboard for the list after it moved to a right-side block (e.g. on selection change) (same as hop's switchTo)
 const REFOCUS_AFTER_MS = [16, 150];
-// 入力待ち・完了直後のパルス（crmux は sin(t*16) ≒ 0.4 秒周期で枠を 50〜100% に揺らす）
+// Pulse for waiting-for-input / just-finished (crmux swings the border between 50-100% with sin(t*16), a period of about 0.4s)
 const PULSE = { from: 0.5, to: 1, period: 400 };
 const EMOJI_FONT = "Noto Color Emoji";
-// Normal モードのキー → act() の名前（crmux event_handler.rs handle_normal_mode）
+// Normal mode key -> act() name (crmux event_handler.rs handle_normal_mode)
 const KEYS = {
   j: "down", down: "down", k: "up", up: "up", t: "toggle", i: "insert", v: "arrange", q: "main",
   h: "tab-prev", left: "tab-prev", l: "tab-next", right: "tab-next", space: "mark",
   escape: "esc",
 };
 const CTRL_KEYS = { u: "scroll-up", d: "scroll-down" };
-// git diff 要約を取り直す間隔（crmux app.rs と同じ 5 秒）
+// Interval to refresh the git diff summary (5 seconds, same as crmux app.rs)
 const DIFF_MS = 5000;
-// 一覧の幅（layout の list ブロック）と、タブバーの文字数の見積もりに使う 1 文字の幅（12px の等幅フォントの半角）
+// List width (the layout's list block) and the width of one character used to estimate tab bar characters (half-width of a 12px monospace font)
 const LIST_PX = 280;
 const LIST_PAD = 8;
 const CHAR_PX = 7.2;
-// diffSummary の色の役割 → テーマの色名（ansi1 赤、ansi2 緑、ansi3 黄）
+// diffSummary color role -> theme color name (ansi1 red, ansi2 green, ansi3 yellow)
 const DIFF_COLORS = { add: "ansi2", mod: "ansi3", del: "ansi1", dim: "muted" };
 
 export default class CrmuxList extends View {
@@ -58,7 +58,7 @@ export default class CrmuxList extends View {
     this.scrolledTo = null;
     this.tickSig = "";
     this.width = LIST_PX;
-    // git diff 要約: diffKey(machine, cwd) → diffSummary の結果（mod の中だけに持つ）
+    // git diff summary: diffKey(machine, cwd) -> diffSummary result (kept only inside the mod)
     this.diffs = {};
     this.diffSig = "";
     if (checking()) return;
@@ -66,13 +66,13 @@ export default class CrmuxList extends View {
     setShared("crmux.mode", "normal");
     setShared("crmux.next", nextArrange(this.arrange()));
     this.handle.focus();
-    // init 直後は focus が効かないことがあり（hop と同じく少し後に取り直す）、layout() もまだ前の layout を返すので、
-    // 並べ方の復元（layout.set はファイルを書き換えるので、install.sh 直後などは Single に戻っている）も少し後に
+    // Focus may not take effect right after init (re-acquire a little later, as hop does), and layout() still returns the previous layout, so
+    // restoring the arrangement (layout.set rewrites the file, so right after install.sh etc. it is back to Single) is also done a little later
     cx.timer.after(300, () => {
       this.refocus();
       this.applyLayout();
     });
-    // 経過時間・パルスの開始/終了の表示更新と、エージェントの増減に合わせた並べ直し
+    // Refresh the display when elapsed time / pulse starts or ends, and re-arrange as agents come and go
     cx.timer.every(1000, (cx) => this.tick(cx));
     cx.spawn(async (cx) => {
       for (;;) {
@@ -81,7 +81,7 @@ export default class CrmuxList extends View {
         cx.notify();
       }
     });
-    // git diff 要約を 5 秒ごとに取り直し、変わったときだけ描き直す
+    // Refresh the git diff summary every 5 seconds and redraw only when it changed
     cx.spawn(async (cx) => {
       for (;;) {
         await this.refreshDiffs(cx).catch(() => {});
@@ -90,13 +90,13 @@ export default class CrmuxList extends View {
     });
   }
 
-  // --- 状態（shared） ---
+  // --- State (shared) ---
 
   arrange() {
     return shared("crmux.arrange") ?? DEFAULT_ARRANGE;
   }
 
-  // すべてのエージェント（project 名の昇順）
+  // All agents (ascending by project name)
   items() {
     const byPane = new Map(panes().map((p) => [p.pane, p]));
     const bySpace = new Map(spaces().map((s) => [s.id, s]));
@@ -116,7 +116,7 @@ export default class CrmuxList extends View {
     return shared("crmux.marks") ?? [];
   }
 
-  // タブ一覧・今のタブと、そのタブで絞り込んだエージェント（一覧・番号・j/k・t・プレビューの対象）
+  // Tab list, current tab, and the agents filtered by that tab (targets of the list, numbers, j/k, t, and the preview)
   view() {
     const all = this.items();
     const marks = this.marks();
@@ -134,20 +134,20 @@ export default class CrmuxList extends View {
     return pickSelected(addresses, shared("crmux.selected"), focused()?.agent);
   }
 
-  // --- 操作 ---
+  // --- Actions ---
 
   command(c) {
     if (c === "focus") return this.refocus();
     if (c === "normal") {
-      // keys.json の layout:crmux の escape。右のターミナルにいれば一覧へ戻る（Insert → Normal）。
-      // 一覧にいるとき（Normal の Esc）にもこのコマンドで届くことがある
+      // The escape in keys.json for layout:crmux. If we are in the right terminal, go back to the list (Insert -> Normal).
+      // This command may also arrive while in the list (Esc in Normal)
       if (this.insert || !this.handle.is_focused()) return this.toNormal();
       return this.esc();
     }
     this.act(c);
   }
 
-  // Normal モードの操作。キーと herdr-app do crmux-list.<name> の両方から呼ぶ
+  // Normal mode actions. Called from both keys and herdr-app do crmux-list.<name>
   act(name) {
     const list = this.addresses();
     const sel = this.selected(list);
@@ -180,22 +180,22 @@ export default class CrmuxList extends View {
 
   focusAgent(address) {
     setShared("crmux.selected", address);
-    // agent.focus は Single の agent ブロックの中身を切り替える（複数表示でも herdr の focused agent を揃える）
+    // agent.focus switches the contents of the Single agent block (also keeps herdr's focused agent in sync for multi-pane display)
     this.keepFocus(() => {
       run("agent.focus", { terminal: address });
       this.applyLayout();
     });
   }
 
-  // Space: 選択中のマークを切り替える。Marked タブで外したエージェントは一覧から消える
-  // （最後のマークを外すと Marked タブが無くなり All に戻る）
+  // Space: toggle the mark on the selected one. An agent unmarked in the Marked tab disappears from the list
+  // (removing the last mark removes the Marked tab and returns to All)
   markSelected(sel) {
     if (!sel) return;
     setShared("crmux.marks", toggleMark(this.marks(), sel));
     this.refilter(sel);
   }
 
-  // h / l: タブを回す
+  // h / l: cycle tabs
   switchTab(dir, sel) {
     const v = this.view();
     const next = cycleTab(v.tabs, v.tab, dir);
@@ -203,7 +203,7 @@ export default class CrmuxList extends View {
     this.refilter(sel);
   }
 
-  // 絞り込みが変わった後: 選択していたエージェントが残っていれば維持、いなければ先頭（crmux switch_tab）
+  // After the filter changes: keep the selected agent if it remains, otherwise the first (crmux switch_tab)
   refilter(before) {
     const next = keepSelection(this.addresses(), before);
     if (next && next !== before) this.focusAgent(next);
@@ -216,7 +216,7 @@ export default class CrmuxList extends View {
     this.keepFocus(() => this.applyLayout());
   }
 
-  // 並べ方・一覧・選択から右側を組み、今の layout と違えば layout.set で差し替える
+  // Build the right side from the arrangement, list, and selection, and swap it via layout.set if it differs from the current layout
   applyLayout() {
     if (shared("layout") !== LAYOUT) return;
     const list = this.addresses();
@@ -225,7 +225,7 @@ export default class CrmuxList extends View {
     run("layout.set", { layout: crmuxLayout(want) });
   }
 
-  // 選択移動や layout.set でキーボードが右のブロックへ移るので、一覧へ取り直す（すぐと、落ち着いた後）
+  // Selection moves and layout.set move the keyboard to a right-side block, so reclaim it for the list (immediately, and again after things settle)
   keepFocus(fn) {
     const n = ++this.switches;
     fn();
@@ -237,7 +237,7 @@ export default class CrmuxList extends View {
     }
   }
 
-  // Insert 中（右のターミナルで入力中）は取り直さない
+  // Do not reclaim during Insert (typing in a right-side terminal)
   refocus() {
     if (!this.insert) this.handle.focus();
   }
@@ -257,11 +257,11 @@ export default class CrmuxList extends View {
     this.keepFocus(() => {});
   }
 
-  // Normal の Esc: Insert から戻った直後なら、選択中のエージェントへ Esc Esc を送って Insert へ戻る
-  // （この layout ではターミナルの Esc を Normal へ戻るのに使うので、crmux と同じく 2 回目で通す）
+  // Esc in Normal: right after returning from Insert, send Esc Esc to the selected agent to go back to Insert
+  // (this layout uses the terminal's Esc to return to Normal, so like crmux the second one passes through)
   esc() {
     const now = Date.now();
-    // keys.json の escape（normal コマンド）と on_key_down の両方に届いたときの 2 重処理を防ぐ
+    // Prevent double handling when it reaches both the keys.json escape (normal command) and on_key_down
     if (now - this.lastEscAt < 100) return;
     this.lastEscAt = now;
     const sel = this.selected();
@@ -281,12 +281,12 @@ export default class CrmuxList extends View {
     if (sel) run("terminal.scroll", { terminal: sel, ...args });
   }
 
-  // Normal モードのキー（一覧にフォーカスがあるときだけ届く）
+  // Normal mode keys (delivered only when the list has focus)
   onKey(e, cx) {
     const m = e.modifiers;
     const k = e.key;
     if (m.alt || m.platform) return;
-    // 一覧にキーが届いた = Normal（クリックで戻ってきた場合など）
+    // A key reached the list = Normal (e.g. returned by a click)
     if (this.insert) {
       this.insert = false;
       setShared("crmux.mode", "normal");
@@ -303,7 +303,7 @@ export default class CrmuxList extends View {
     cx.notify();
   }
 
-  // 1 秒ごと: 表示（経過時間・パルスの有無）が変わったときだけ描き直す。エージェントの増減で並べ直す
+  // Every second: redraw only when the display (elapsed time, pulse presence) changed. Re-arrange as agents come and go
   tick(cx) {
     this.applyLayout();
     const now = Date.now();
@@ -317,7 +317,7 @@ export default class CrmuxList extends View {
     cx.notify();
   }
 
-  // 全エージェントの cwd（同じものは 1 回）で git diff を取り直す（crmux state.rs resolve_git_diff）
+  // Refresh git diff for each agent cwd (once per distinct cwd) (crmux state.rs resolve_git_diff)
   async refreshDiffs(cx) {
     const targets = diffTargets(this.items());
     const results = await Promise.all(targets.map((t) => gitDiff(t)));
@@ -329,9 +329,9 @@ export default class CrmuxList extends View {
     cx.notify();
   }
 
-  // --- 描画 ---
+  // --- Rendering ---
 
-  // 状態遷移の記録を更新（変わったときだけ shared へ）
+  // Update the state-transition records (write to shared only when changed)
   records(items) {
     const old = shared("crmux.records") ?? {};
     const changedAt = new Map(spaces().flatMap((s) => s.tabs).map((t) => [t.id, t.changed_at]));
@@ -342,14 +342,14 @@ export default class CrmuxList extends View {
     return next;
   }
 
-  // マークを捨てる: いなくなったエージェントの分（変わったときだけ shared へ。エージェントが取れていないときは触らない）
+  // Drop marks of agents that are gone (write to shared only when changed; do nothing when agents could not be fetched)
   dropGoneMarks(all) {
     const marks = this.marks();
     const next = pruneMarks(marks, all);
     if (next !== marks && all.length && !checking()) setShared("crmux.marks", next);
   }
 
-  // 今のタブが無くなっていれば All に戻す（保存も消す）
+  // If the current tab is gone, go back to All (and clear the saved one)
   resetTab(v) {
     const stored = shared("crmux.tab");
     if (stored && v.tab.kind === "all" && stored.kind !== "all" && v.all.length && !checking()) {
@@ -357,7 +357,7 @@ export default class CrmuxList extends View {
     }
   }
 
-  // 見出し（crmux の枠タイトル）とタブバー（タブが 2 つ以上のとき）
+  // Heading (crmux frame title) and tab bar (when there are 2 or more tabs)
   header(t, v) {
     const chars = Math.floor((this.width - LIST_PAD * 2) / CHAR_PX);
     const segs = tabBarWindow(v.tabs.map(tabLabel), v.index, chars);
@@ -370,7 +370,7 @@ export default class CrmuxList extends View {
           .child(s.text)))));
   }
 
-  // カード下辺左の git diff 要約
+  // git diff summary at the card's bottom-left
   diff(t, a) {
     const parts = a.cwd ? this.diffs[diffKey(a.machine, a.cwd)] : null;
     return h_flex().flex_1().min_w(0).overflow_hidden().whitespace_nowrap()
@@ -400,15 +400,15 @@ export default class CrmuxList extends View {
       .child(v_flex().px(9).py(5).gap(2)
         .child(div().truncate().font_bold().text_color(color)
           .child(cardLabel({ selected, index, project: a.project, branch: a.branch })))
-        // 本文: マーク（* は緑・太字、無ければ空白 2 つ）とターミナルのタイトル（crmux ui.rs mark_span）
+        // Body: mark (* is green and bold, otherwise 2 spaces) and the terminal title (crmux ui.rs mark_span)
         .child(h_flex().min_w(0)
           .child(div().flex_none().whitespace_nowrap().font_bold().text_color(t.ansi2 ?? t.foreground).child(markPrefix(marked)))
           .child(div().flex_1().min_w(0).truncate().text_color(t.foreground).child(a.title || " ")))
-        // 下辺: 左に git diff 要約、右に状態アイコンと経過時間
+        // Bottom edge: git diff summary on the left, state icon and elapsed time on the right
         .child(h_flex().justify_between().gap(6)
           .child(this.diff(t, a))
           .child(h_flex().flex_none().gap(6).text_color(color)
-            // 💤 は等幅フォントのフォールバック（Cica）だと別物の単色グリフになるので絵文字フォントで描く
+            // With the monospace fallback font (Cica), 💤 becomes a different monochrome glyph, so draw it with an emoji font
             .child(div().when(kind === "idle", (el) => el.font_family(EMOJI_FONT)).child(statusIcon(a.status)))
             .child(formatElapsed(secs)))));
   }
@@ -419,7 +419,7 @@ export default class CrmuxList extends View {
     const { items, marks } = v;
     const list = items.map((a) => a.address);
     const sel = this.selected(list);
-    // 状態遷移の記録とマークの掃除は絞り込み前の全エージェントで（絞り込みで記録が消えないように）
+    // Clean up state-transition records and marks using all agents before filtering (so filtering does not drop records)
     const records = this.records(v.all);
     this.dropGoneMarks(v.all);
     this.resetTab(v);
@@ -434,14 +434,14 @@ export default class CrmuxList extends View {
     return v_flex().id("crmux-list").track_focus(this.handle).size_full().min_h(0)
       .font_family(settings().font_family ?? "JetBrains Mono").text_size(12)
       .on_size_change((size, cx) => {
-        // タブバーの文字数の見積もりに使う
+        // Used to estimate the tab bar's character count
         if (Math.abs(size.width - this.width) < 1) return;
         this.width = size.width;
         cx.notify();
       })
       .on_key_down((e, cx) => this.onKey(e, cx))
       .on_mouse_down("left", (_e, cx) => {
-        // 一覧の余白のクリックでも Normal に戻る（window_drag はそのまま効かせる）
+        // A click on the list's margin also returns to Normal (window_drag still works as is)
         this.insert = false;
         setShared("crmux.mode", "normal");
         this.handle.focus();
@@ -454,8 +454,8 @@ export default class CrmuxList extends View {
   }
 }
 
-// cwd の git diff 要約（crmux state.rs resolve_git_diff）。git リポジトリでない・git が無いなどは null（表示しない）。
-// --no-optional-locks: 5 秒ごとの取得で index.lock を取らない（利用者の git 操作とぶつからないように）
+// git diff summary for cwd (crmux state.rs resolve_git_diff). null (not shown) when it is not a git repository, git is missing, etc.
+// --no-optional-locks: do not take index.lock on the 5-second fetch (to avoid clashing with the user's own git operations)
 async function gitDiff({ cwd, machine }) {
   const opts = { timeout: DIFF_MS, ...(machine ? { on: machine } : {}) };
   const git = (args) => exec("git", ["--no-optional-locks", "-C", cwd, "diff", ...args, "--numstat"], opts);

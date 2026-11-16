@@ -1,4 +1,4 @@
-// フッターの文言（crmux ui.rs footer_spans を herdr 向けに）。描画側は bold / app を見て装飾する
+// Footer text (crmux ui.rs footer_spans adapted for herdr). The renderer decorates using bold / app
 
 export function footerParts(mode, nextArrange) {
   if (mode === "insert") {
