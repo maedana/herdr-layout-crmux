@@ -85,3 +85,7 @@ State (selection, arrangement, status times, marks, current tab) is kept in Herd
 node --test                                   # pure logic: mods/crmux-list/{cards,arrange,tabs,diff}.js, footer
 ./install.sh && herdr-app check ~/.config/herdr-app/mods/crmux-list
 ```
+
+## License
+
+MIT, see [LICENSE](LICENSE).
