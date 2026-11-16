@@ -4,9 +4,9 @@ import { footerParts } from "../mods/crmux-footer/footer.js";
 
 const text = (parts) => parts.map((p) => p.text).join("");
 
-test("Normal: アプリ名とキーヒント、v には次の並べ方", () => {
+test("Normal: アプリ名とキーヒント（h/l のタブ切り替えと Space のマークを含む）、v には次の並べ方", () => {
   assert.equal(text(footerParts("normal", "Single")),
-    "crmux | j/k/1-9/t:Nav C-u:ScrollUp v:Single i:Insert q:Main");
+    "crmux | hjkl/1-9/t:Nav C-u:ScrollUp Space:Mark v:Single i:Insert q:Main");
 });
 
 test("Insert: -- INSERT -- を太字で、Esc で戻ることを示す", () => {

@@ -1,10 +1,10 @@
 // crmux 風のカード一覧（左）と Normal モードのキー処理。
 // 右のプレビューは layout の agent / terminal ブロック（本物のターミナル）で、並べ方は layout.set で差し替える。
-// layout の切り替えでこの mod は作り直されるので、残したい状態（選択・並べ方・状態遷移の記録）は shared に置く。
+// layout の切り替えでこの mod は作り直されるので、残したい状態（選択・並べ方・状態遷移の記録・マーク・タブ）は shared に置く。
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex, ScrollHandle } from "gpui-base";
 import {
-  agents, panes, spaces, run, hc, shared, setShared, theme, settings, layout, checking, nextCommand, setAgentOrder,
+  agents, panes, spaces, run, hc, exec, shared, setShared, theme, settings, layout, checking, nextCommand, setAgentOrder,
   focused,
 } from "herdr";
 import {
@@ -12,6 +12,11 @@ import {
   pickSelected,
 } from "./cards.js";
 import { nextArrange, previewTree, crmuxLayout, findNode, sameTree } from "./arrange.js";
+import {
+  buildTabs, filterByTab, tabIndex, cycleTab, keepSelection, tabLabel, tabTitle, tabBarWindow, toggleMark, pruneMarks,
+  markPrefix,
+} from "./tabs.js";
+import { parseNumstat, diffSummary, diffTargets, diffKey } from "./diff.js";
 
 const LAYOUT = "crmux";
 const DEFAULT_ARRANGE = "MainV";
@@ -27,9 +32,18 @@ const EMOJI_FONT = "Noto Color Emoji";
 // Normal モードのキー → act() の名前（crmux event_handler.rs handle_normal_mode）
 const KEYS = {
   j: "down", down: "down", k: "up", up: "up", t: "toggle", i: "insert", v: "arrange", q: "main",
+  h: "tab-prev", left: "tab-prev", l: "tab-next", right: "tab-next", space: "mark",
   escape: "esc",
 };
 const CTRL_KEYS = { u: "scroll-up", d: "scroll-down" };
+// git diff 要約を取り直す間隔（crmux app.rs と同じ 5 秒）
+const DIFF_MS = 5000;
+// 一覧の幅（layout の list ブロック）と、タブバーの文字数の見積もりに使う 1 文字の幅（12px の等幅フォントの半角）
+const LIST_PX = 280;
+const LIST_PAD = 8;
+const CHAR_PX = 7.2;
+// diffSummary の色の役割 → テーマの色名（ansi1 赤、ansi2 緑、ansi3 黄）
+const DIFF_COLORS = { add: "ansi2", mod: "ansi3", del: "ansi1", dim: "muted" };
 
 export default class CrmuxList extends View {
   init(_props, cx) {
@@ -43,6 +57,10 @@ export default class CrmuxList extends View {
     this.gAt = 0;
     this.scrolledTo = null;
     this.tickSig = "";
+    this.width = LIST_PX;
+    // git diff 要約: diffKey(machine, cwd) → diffSummary の結果（mod の中だけに持つ）
+    this.diffs = {};
+    this.diffSig = "";
     if (checking()) return;
 
     setShared("crmux.mode", "normal");
@@ -63,6 +81,13 @@ export default class CrmuxList extends View {
         cx.notify();
       }
     });
+    // git diff 要約を 5 秒ごとに取り直し、変わったときだけ描き直す
+    cx.spawn(async (cx) => {
+      for (;;) {
+        await this.refreshDiffs(cx).catch(() => {});
+        await cx.sleep(DIFF_MS);
+      }
+    });
   }
 
   // --- 状態（shared） ---
@@ -71,20 +96,38 @@ export default class CrmuxList extends View {
     return shared("crmux.arrange") ?? DEFAULT_ARRANGE;
   }
 
-  // 一覧に出すエージェント（project 名の昇順）
+  // すべてのエージェント（project 名の昇順）
   items() {
     const byPane = new Map(panes().map((p) => [p.pane, p]));
+    const bySpace = new Map(spaces().map((s) => [s.id, s]));
     return sortByProject(agents().map((a) => {
       const p = byPane.get(a.pane);
+      const s = bySpace.get(a.space);
       return {
         address: a.address, pane: a.pane, tab: a.tab, status: a.status, title: a.title,
         project: projectName(p?.cwd) || a.space_name, branch: p?.branch ?? null,
+        space: a.space, spaceName: a.space_name, spaceIndex: s?.index ?? 0,
+        cwd: p?.cwd ?? null, machine: s?.machine ?? null,
       };
     }));
   }
 
+  marks() {
+    return shared("crmux.marks") ?? [];
+  }
+
+  // タブ一覧・今のタブと、そのタブで絞り込んだエージェント（一覧・番号・j/k・t・プレビューの対象）
+  view() {
+    const all = this.items();
+    const marks = this.marks();
+    const tabs = buildTabs(all, marks);
+    const index = tabIndex(tabs, shared("crmux.tab"));
+    const tab = tabs[index];
+    return { all, marks, tabs, index, tab, items: filterByTab(all, tab, marks) };
+  }
+
   addresses() {
-    return this.items().map((a) => a.address);
+    return this.view().items.map((a) => a.address);
   }
 
   selected(addresses = this.addresses()) {
@@ -122,6 +165,9 @@ export default class CrmuxList extends View {
     else if (name === "top") this.scrollPreview(sel, { to: "top" });
     else if (name === "bottom") this.scrollPreview(sel, { to: "bottom" });
     else if (name === "esc") this.esc();
+    else if (name === "mark") this.markSelected(sel);
+    else if (name === "tab-next") this.switchTab(1, sel);
+    else if (name === "tab-prev") this.switchTab(-1, sel);
   }
 
   select(address) {
@@ -129,12 +175,39 @@ export default class CrmuxList extends View {
     const cur = this.selected(list);
     if (!address || address === cur || !list.includes(address)) return;
     setShared("crmux.prev", cur);
+    this.focusAgent(address);
+  }
+
+  focusAgent(address) {
     setShared("crmux.selected", address);
     // agent.focus は Single の agent ブロックの中身を切り替える（複数表示でも herdr の focused agent を揃える）
     this.keepFocus(() => {
       run("agent.focus", { terminal: address });
       this.applyLayout();
     });
+  }
+
+  // Space: 選択中のマークを切り替える。Marked タブで外したエージェントは一覧から消える
+  // （最後のマークを外すと Marked タブが無くなり All に戻る）
+  markSelected(sel) {
+    if (!sel) return;
+    setShared("crmux.marks", toggleMark(this.marks(), sel));
+    this.refilter(sel);
+  }
+
+  // h / l: タブを回す
+  switchTab(dir, sel) {
+    const v = this.view();
+    const next = cycleTab(v.tabs, v.tab, dir);
+    setShared("crmux.tab", { kind: next.kind, value: next.value ?? null });
+    this.refilter(sel);
+  }
+
+  // 絞り込みが変わった後: 選択していたエージェントが残っていれば維持、いなければ先頭（crmux switch_tab）
+  refilter(before) {
+    const next = keepSelection(this.addresses(), before);
+    if (next && next !== before) this.focusAgent(next);
+    else this.keepFocus(() => this.applyLayout());
   }
 
   setArrange(arrange) {
@@ -244,6 +317,18 @@ export default class CrmuxList extends View {
     cx.notify();
   }
 
+  // 全エージェントの cwd（同じものは 1 回）で git diff を取り直す（crmux state.rs resolve_git_diff）
+  async refreshDiffs(cx) {
+    const targets = diffTargets(this.items());
+    const results = await Promise.all(targets.map((t) => gitDiff(t)));
+    const next = Object.fromEntries(targets.map((t, i) => [t.key, results[i]]));
+    const sig = JSON.stringify(next);
+    if (sig === this.diffSig) return;
+    this.diffSig = sig;
+    this.diffs = next;
+    cx.notify();
+  }
+
   // --- 描画 ---
 
   // 状態遷移の記録を更新（変わったときだけ shared へ）
@@ -257,7 +342,43 @@ export default class CrmuxList extends View {
     return next;
   }
 
-  card(t, a, index, selected, record, now) {
+  // マークを捨てる: いなくなったエージェントの分（変わったときだけ shared へ。エージェントが取れていないときは触らない）
+  dropGoneMarks(all) {
+    const marks = this.marks();
+    const next = pruneMarks(marks, all);
+    if (next !== marks && all.length && !checking()) setShared("crmux.marks", next);
+  }
+
+  // 今のタブが無くなっていれば All に戻す（保存も消す）
+  resetTab(v) {
+    const stored = shared("crmux.tab");
+    if (stored && v.tab.kind === "all" && stored.kind !== "all" && v.all.length && !checking()) {
+      setShared("crmux.tab", null);
+    }
+  }
+
+  // 見出し（crmux の枠タイトル）とタブバー（タブが 2 つ以上のとき）
+  header(t, v) {
+    const chars = Math.floor((this.width - LIST_PAD * 2) / CHAR_PX);
+    const segs = tabBarWindow(v.tabs.map(tabLabel), v.index, chars);
+    return v_flex().flex_none().px(LIST_PAD + 1).pt(LIST_PAD).gap(2)
+      .child(div().truncate().font_bold().text_color(t.foreground).child(tabTitle(v.tab, v.items.length)))
+      .when(v.tabs.length > 1, (el) => el.child(h_flex().overflow_hidden().whitespace_nowrap()
+        .children(segs.map((s) => div().flex_none().whitespace_nowrap()
+          .text_color(s.selected ? t.chrome : t.muted)
+          .when(s.selected, (d) => d.bg(t.foreground))
+          .child(s.text)))));
+  }
+
+  // カード下辺左の git diff 要約
+  diff(t, a) {
+    const parts = a.cwd ? this.diffs[diffKey(a.machine, a.cwd)] : null;
+    return h_flex().flex_1().min_w(0).overflow_hidden().whitespace_nowrap()
+      .children((parts ?? []).map((p) => div().flex_none().whitespace_nowrap()
+        .text_color(t[DIFF_COLORS[p.color]] ?? t.muted).child(p.text)));
+  }
+
+  card(t, a, index, selected, record, now, marked) {
     const kind = statusKind(a.status);
     const color = t[kind] ?? t.foreground;
     const secs = Math.floor((now - (record?.since ?? now)) / 1000);
@@ -279,28 +400,45 @@ export default class CrmuxList extends View {
       .child(v_flex().px(9).py(5).gap(2)
         .child(div().truncate().font_bold().text_color(color)
           .child(cardLabel({ selected, index, project: a.project, branch: a.branch })))
-        .child(div().truncate().text_color(t.foreground).child(a.title || " "))
-        .child(h_flex().justify_end().gap(6).text_color(color)
-          // 💤 は等幅フォントのフォールバック（Cica）だと別物の単色グリフになるので絵文字フォントで描く
-          .child(div().when(kind === "idle", (el) => el.font_family(EMOJI_FONT)).child(statusIcon(a.status)))
-          .child(formatElapsed(secs))));
+        // 本文: マーク（* は緑・太字、無ければ空白 2 つ）とターミナルのタイトル（crmux ui.rs mark_span）
+        .child(h_flex().min_w(0)
+          .child(div().flex_none().whitespace_nowrap().font_bold().text_color(t.ansi2 ?? t.foreground).child(markPrefix(marked)))
+          .child(div().flex_1().min_w(0).truncate().text_color(t.foreground).child(a.title || " ")))
+        // 下辺: 左に git diff 要約、右に状態アイコンと経過時間
+        .child(h_flex().justify_between().gap(6)
+          .child(this.diff(t, a))
+          .child(h_flex().flex_none().gap(6).text_color(color)
+            // 💤 は等幅フォントのフォールバック（Cica）だと別物の単色グリフになるので絵文字フォントで描く
+            .child(div().when(kind === "idle", (el) => el.font_family(EMOJI_FONT)).child(statusIcon(a.status)))
+            .child(formatElapsed(secs)))));
   }
 
   render() {
     const t = theme();
-    const items = this.items();
+    const v = this.view();
+    const { items, marks } = v;
     const list = items.map((a) => a.address);
     const sel = this.selected(list);
-    const records = this.records(items);
+    // 状態遷移の記録とマークの掃除は絞り込み前の全エージェントで（絞り込みで記録が消えないように）
+    const records = this.records(v.all);
+    this.dropGoneMarks(v.all);
+    this.resetTab(v);
     const now = Date.now();
-    setAgentOrder(list);
+    setAgentOrder(v.all.map((a) => a.address));
     const at = list.indexOf(sel);
-    if (at >= 0 && at !== this.scrolledTo) {
-      this.scrolledTo = at;
+    const scrollKey = `${tabLabel(v.tab)}:${at}`;
+    if (at >= 0 && scrollKey !== this.scrolledTo) {
+      this.scrolledTo = scrollKey;
       this.scroll.scroll_to_item(at);
     }
     return v_flex().id("crmux-list").track_focus(this.handle).size_full().min_h(0)
       .font_family(settings().font_family ?? "JetBrains Mono").text_size(12)
+      .on_size_change((size, cx) => {
+        // タブバーの文字数の見積もりに使う
+        if (Math.abs(size.width - this.width) < 1) return;
+        this.width = size.width;
+        cx.notify();
+      })
       .on_key_down((e, cx) => this.onKey(e, cx))
       .on_mouse_down("left", (_e, cx) => {
         // 一覧の余白のクリックでも Normal に戻る（window_drag はそのまま効かせる）
@@ -309,8 +447,24 @@ export default class CrmuxList extends View {
         this.handle.focus();
         cx.notify();
       })
+      .child(this.header(t, v))
       .child(v_flex().id("crmux-cards").flex_1().min_h(0).p(8).gap(6).overflow_y_scrollbar().track_scroll(this.scroll)
         .when(!items.length, (el) => el.child(div().p(4).text_color(t.muted).child("No agents")))
-        .children(items.map((a, i) => this.card(t, a, i, a.address === sel, records[a.address], now))));
+        .children(items.map((a, i) => this.card(t, a, i, a.address === sel, records[a.address], now, marks.includes(a.address)))));
+  }
+}
+
+// cwd の git diff 要約（crmux state.rs resolve_git_diff）。git リポジトリでない・git が無いなどは null（表示しない）。
+// --no-optional-locks: 5 秒ごとの取得で index.lock を取らない（利用者の git 操作とぶつからないように）
+async function gitDiff({ cwd, machine }) {
+  const opts = { timeout: DIFF_MS, ...(machine ? { on: machine } : {}) };
+  const git = (args) => exec("git", ["--no-optional-locks", "-C", cwd, "diff", ...args, "--numstat"], opts);
+  try {
+    const staged = await git(["--cached"]);
+    if (staged.code !== 0) return null;
+    const unstaged = await git([]).catch(() => null);
+    return diffSummary(parseNumstat(staged.stdout), unstaged?.code === 0 ? parseNumstat(unstaged.stdout) : null);
+  } catch {
+    return null;
   }
 }
