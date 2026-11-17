@@ -13,7 +13,7 @@ import {
 } from "./cards.js";
 import { nextArrange, previewTree, crmuxLayout, findNode, sameTree } from "./arrange.js";
 import {
-  buildTabs, filterByTab, tabIndex, cycleTab, keepSelection, tabLabel, tabTitle, tabBarWindow, toggleMark, pruneMarks,
+  buildTabs, filterByTab, tabIndex, cycleTab, keepSelection, tabLabel, tabBarLabels, tabBarWindow, toggleMark, pruneMarks,
   markPrefix,
 } from "./tabs.js";
 import { parseNumstat, diffSummary, diffTargets, diffKey, keepRepos } from "./diff.js";
@@ -388,17 +388,15 @@ export default class CrmuxList extends View {
     }
   }
 
-  // Heading (crmux frame title) and tab bar (when there are 2 or more tabs)
+  // Tab bar with each tab's count (it replaces crmux's heading, so it is shown even with a single tab)
   header(t, v) {
     const chars = Math.floor((this.width - LIST_PAD * 2) / CHAR_PX);
-    const segs = tabBarWindow(v.tabs.map(tabLabel), v.index, chars);
-    return v_flex().flex_none().px(LIST_PAD + 1).pt(LIST_PAD).gap(2)
-      .child(div().truncate().font_bold().text_color(t.foreground).child(tabTitle(v.tab, v.items.length)))
-      .when(v.tabs.length > 1, (el) => el.child(h_flex().overflow_hidden().whitespace_nowrap()
-        .children(segs.map((s) => div().flex_none().whitespace_nowrap()
-          .text_color(s.selected ? t.chrome : t.muted)
-          .when(s.selected, (d) => d.bg(t.foreground))
-          .child(s.text)))));
+    const segs = tabBarWindow(tabBarLabels(v.tabs, v.all, v.marks), v.index, chars);
+    return h_flex().flex_none().px(LIST_PAD + 1).pt(LIST_PAD).overflow_hidden().whitespace_nowrap()
+      .children(segs.map((s) => div().flex_none().whitespace_nowrap()
+        .text_color(s.selected ? t.chrome : t.muted)
+        .when(s.selected, (d) => d.bg(t.foreground))
+        .child(s.text)));
   }
 
   // git diff summary at the card's bottom-left

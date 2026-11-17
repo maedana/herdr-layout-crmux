@@ -10,11 +10,11 @@ and a vim-like Normal / Insert mode.
 
 ## What you see
 
-- A heading with the current tab and its count (`All Sessions (N)`, `Marked (N)`,
-  `Workspace @space (N)`, `Project name (N)`), and a tab bar under it:
-  `All`, `Marked` (only while something is marked), `@space` (one per space, only with 2+ spaces),
-  `+project` (one per project). The current tab is shown as `[name]`; when the bar is too wide it
+- A tab bar with the number of agents in each tab:
+  `All(N)`, `Marked(N)` (only while something is marked), `@space(N)` (one per space, only with 2+ spaces),
+  `+project(N)` (one per project). The current tab is shown as `[name(N)]`; when the bar is too wide it
   scrolls to keep the current tab in the middle and shows `<` / `>`.
+  (crmux shows the count only in a heading for the current tab; here the tabs carry it and there is no heading.)
 - One card per agent in the current tab, sorted by project (the name of its git
   repository; agents in git worktrees are grouped under the original repository, and outside git
   the folder's basename is used): `> N.project/branch` on top (a worktree agent without a branch

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildTabs, filterByTab, tabIndex, cycleTab, keepSelection, tabLabel, tabTitle, tabBarWindow, toggleMark, pruneMarks, markPrefix } from "../mods/crmux-list/tabs.js";
+import { buildTabs, filterByTab, tabIndex, cycleTab, keepSelection, tabLabel, tabBarLabels, tabBarWindow, toggleMark, pruneMarks, markPrefix } from "../mods/crmux-list/tabs.js";
 
 // Agents in the list (part of the shape of items() in main.js)
 const agent = (address, project, space = "s1", spaceName = "main", spaceIndex = 1) =>
@@ -88,11 +88,17 @@ test("tab labels: All / Marked / @space / +project", () => {
   assert.equal(tabLabel({ kind: "project", value: "crmux" }), "+crmux");
 });
 
-test("list heading (crmux frame title): tab and count", () => {
-  assert.equal(tabTitle({ kind: "all" }, 4), "All Sessions (4)");
-  assert.equal(tabTitle({ kind: "marked" }, 2), "Marked (2)");
-  assert.equal(tabTitle({ kind: "space", value: "s1", name: "work" }, 3), "Workspace @work (3)");
-  assert.equal(tabTitle({ kind: "project", value: "crmux" }, 1), "Project crmux (1)");
+test("tab labels with a count: name(N)", () => {
+  assert.equal(tabLabel({ kind: "all" }, 4), "All(4)");
+  assert.equal(tabLabel({ kind: "marked" }, 2), "Marked(2)");
+  assert.equal(tabLabel({ kind: "space", value: "s1", name: "work" }, 3), "@work(3)");
+  assert.equal(tabLabel({ kind: "project", value: "crmux" }, 0), "+crmux(0)");
+});
+
+test("tabBarLabels: each tab with the number of agents it shows", () => {
+  const agents = [agent("t1", "crmux", "s1", "home", 1), agent("t2", "dotfiles", "s1", "home", 1), agent("t3", "crmux", "s2", "work", 2)];
+  const tabs = buildTabs(agents, ["t2"]);
+  assert.deepEqual(tabBarLabels(tabs, agents, ["t2"]), ["All(3)", "Marked(1)", "@home(2)", "@work(1)", "+crmux(2)", "+dotfiles(1)"]);
 });
 
 const barText = (segs) => segs.map((s) => s.text).join("");

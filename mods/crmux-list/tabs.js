@@ -49,20 +49,19 @@ export function keepSelection(addresses, selected) {
   return addresses.includes(selected) ? selected : addresses[0] ?? null;
 }
 
-// Tab bar labels (crmux ui.rs draw_tab_bar)
-export function tabLabel(tab) {
-  if (tab.kind === "marked") return "Marked";
-  if (tab.kind === "space") return `@${tab.name}`;
-  if (tab.kind === "project") return `+${tab.value}`;
-  return "All";
+// Tab bar labels (crmux ui.rs draw_tab_bar), with the number of agents as "name(N)" when count is given
+// (crmux showed the count only in a heading for the current tab; here every tab carries it instead)
+export function tabLabel(tab, count) {
+  const name = tab.kind === "marked" ? "Marked"
+    : tab.kind === "space" ? `@${tab.name}`
+    : tab.kind === "project" ? `+${tab.value}`
+    : "All";
+  return count === undefined ? name : `${name}(${count})`;
 }
 
-// List heading (crmux ui.rs draw_sessions_list frame title)
-export function tabTitle(tab, count) {
-  if (tab.kind === "marked") return `Marked (${count})`;
-  if (tab.kind === "space") return `Workspace @${tab.name} (${count})`;
-  if (tab.kind === "project") return `Project ${tab.value} (${count})`;
-  return `All Sessions (${count})`;
+// Labels for the tab bar: each tab with the number of agents it shows
+export function tabBarLabels(tabs, agents, marks) {
+  return tabs.map((tab) => tabLabel(tab, filterByTab(agents, tab, marks).length));
 }
 
 const len = (s) => [...s].length;
