@@ -178,6 +178,7 @@ export default class CrmuxList extends View {
     const sel = this.selected(list);
     const at = Math.max(0, list.indexOf(sel));
     const select = /^select-([1-9])$/.exec(name);
+    const tabNo = /^tab-(\d+)$/.exec(name);
     // Leaving Scroll mode with i puts the preview back at the bottom (crmux reset_preview_scroll)
     if (name === "insert" && this.scrolling()) this.scrollPreview(sel, "bottom");
     if (name === "down") this.select(list[cycle(at, 1, list.length)]);
@@ -192,6 +193,7 @@ export default class CrmuxList extends View {
     else if (name === "mark") this.markSelected(sel);
     else if (name === "tab-next") this.switchTab(1, sel);
     else if (name === "tab-prev") this.switchTab(-1, sel);
+    else if (tabNo) this.clickTab(this.view().tabs[Number(tabNo[1])], sel);
     else if (name === "close") this.closeExited(sel, list);
   }
 
@@ -237,9 +239,22 @@ export default class CrmuxList extends View {
   // h / l: cycle tabs
   switchTab(dir, sel) {
     const v = this.view();
-    const next = cycleTab(v.tabs, v.tab, dir);
-    setShared("crmux.tab", { kind: next.kind, value: next.value ?? null });
+    this.selectTab(cycleTab(v.tabs, v.tab, dir), sel);
+  }
+
+  // Switch to the tab (h / l and crmux-list.tab-next / tab-prev). Insert stays as it was (e.g. tab-next from a shell)
+  selectTab(tab, sel) {
+    if (!tab) return;
+    setShared("crmux.tab", { kind: tab.kind, value: tab.value ?? null });
     this.refilter(sel);
+  }
+
+  // A click on the tab bar (crmux-list.tab-<n>): a list action, like a card click, so it leaves Insert first (which reclaims
+  // the keyboard for the list). Out of range (the tabs changed since the click) gives undefined, which does nothing
+  clickTab(tab, sel) {
+    if (!tab) return;
+    this.leaveInsert();
+    this.selectTab(tab, sel);
   }
 
   // After the filter changes: keep the selected agent if it remains, otherwise the first (crmux switch_tab)

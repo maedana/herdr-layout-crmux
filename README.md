@@ -14,7 +14,8 @@ and a vim-like Normal / Insert mode.
 - A tab bar in a full-width header row at the top of the window (above the list and the preview), with the number of agents in each tab:
   `All(N)`, `Marked(N)` (only while something is marked), `@space(N)` (one per space, only with 2+ spaces),
   `+project(N)` (one per project). The current tab is shown as `[name(N)]`; when the bar is too wide it
-  scrolls to keep the current tab in the middle and shows `<` / `>`.
+  scrolls to keep the current tab in the middle and shows `<` / `>`. Click a tab to switch to it (like `h` / `l`),
+  or `<` / `>` to step to the neighbouring tab; clicking a tab while a terminal has the keyboard (Insert) returns to Normal.
   (crmux shows the count only in a heading for the current tab; here the tabs carry it and there is no heading.)
 - One card per agent in the current tab, sorted by project (the name of its git
   repository; agents in git worktrees are grouped under the original repository, and outside git
@@ -80,7 +81,7 @@ Plain `Esc` therefore no longer reaches the program in this layout; press `Esc` 
 
 The same actions can be run from a shell while the layout is shown, e.g.
 `herdr-app do crmux-list.arrange`, `crmux-list.down`, `crmux-list.select-2`, `crmux-list.normal`,
-`crmux-list.mark`, `crmux-list.tab-next`, `crmux-list.tab-prev`, `crmux-list.scroll-up`, `crmux-list.line-down`, `crmux-list.close`.
+`crmux-list.mark`, `crmux-list.tab-next`, `crmux-list.tab-prev`, `crmux-list.tab-<n>` (0 = the first tab; what a tab click sends), `crmux-list.scroll-up`, `crmux-list.line-down`, `crmux-list.close`.
 
 ## Install
 
