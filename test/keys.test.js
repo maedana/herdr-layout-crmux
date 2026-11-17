@@ -36,6 +36,12 @@ test("Normal: n opens a new shell (in the selected one's folder)", () => {
   assert.equal(normalKey("n", shift, false), null);
 });
 
+test("Normal: R (shift-r) drops the tab's own order (back to the automatic one)", () => {
+  assert.equal(normalKey("R", plain, false), "unpin");
+  assert.equal(normalKey("r", shift, false), "unpin");
+  assert.equal(normalKey("r", plain, false), null);
+});
+
 test("Scroll: j/k scroll the preview by one line instead of moving the selection (crmux handle_scroll_mode)", () => {
   assert.equal(scrollKey("j", plain, false), "line-down");
   assert.equal(scrollKey("down", plain, false), "line-down");

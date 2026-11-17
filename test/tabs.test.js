@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildTabs, filterByTab, tabIndex, cycleTab, keepSelection, tabLabel, tabBarLabels, toggleMark, pruneMarks, markPrefix } from "../mods/crmux-list/tabs.js";
+import { buildTabs, filterByTab, tabIndex, cycleTab, keepSelection, tabLabel, tabBarLabels, toggleMark, pruneMarks, markPrefix, tabKey, applyOrder, swapInOrder, pruneOrders } from "../mods/crmux-list/tabs.js";
 
 // Agents in the list (part of the shape of items() in main.js)
 const agent = (address, project, space = "s1", spaceName = "main", spaceIndex = 1) =>
@@ -125,4 +125,44 @@ test("marks: return the same array if there is nothing to drop (no write to shar
 test("start of the card body: * if marked, otherwise 2 spaces (crmux ui.rs mark_indicator)", () => {
   assert.equal(markPrefix(true), "* ");
   assert.equal(markPrefix(false), "  ");
+});
+
+// --- A tab's own order (alt-shift-h/j/k/l swaps previews; shared("crmux.orders"): { [tabKey]: [addresses] }) ---
+
+test("tab key: one per tab, stable across renders (the space by its id, the project by its name)", () => {
+  assert.equal(tabKey({ kind: "all" }), "all");
+  assert.equal(tabKey({ kind: "marked" }), "marked");
+  assert.equal(tabKey({ kind: "space", value: "s1", name: "work" }), "space:s1");
+  assert.equal(tabKey({ kind: "project", value: "todotxt" }), "project:todotxt");
+});
+
+test("order: the saved ones first in the saved order, newcomers after them in the list's order", () => {
+  const items = [agent("t1", "p"), agent("t2", "p"), agent("t3", "p"), agent("t4", "p")];
+  assert.deepEqual(applyOrder(items, ["t3", "t1"]).map((a) => a.address), ["t3", "t1", "t2", "t4"]);
+});
+
+test("order: none saved keeps the list as it is; saved addresses not in the list are skipped", () => {
+  const items = [agent("t1", "p"), agent("t2", "p")];
+  assert.equal(applyOrder(items, undefined), items);
+  assert.deepEqual(applyOrder(items, ["t9", "t2"]).map((a) => a.address), ["t2", "t1"]);
+});
+
+test("swap: the two trade places in the shown order", () => {
+  assert.deepEqual(swapInOrder(["t2", "t1", "t3"], "t1", "t3"), ["t2", "t3", "t1"]);
+});
+
+test("orders: gone terminals are dropped, a tab left with none loses its order, the same object back if unchanged", () => {
+  const items = [agent("t1", "p"), agent("t3", "p")];
+  const orders = { "project:p": ["t3", "t2", "t1"], "project:q": ["t2"] };
+  assert.deepEqual(pruneOrders(orders, items), { "project:p": ["t3", "t1"] });
+  const kept = { "project:p": ["t3", "t1"] };
+  assert.equal(pruneOrders(kept, items), kept);
+  assert.deepEqual(pruneOrders(undefined, items), {});
+});
+
+test("tab bar: a tab with its own order carries a pin", () => {
+  const tabs = [{ kind: "all" }, { kind: "project", value: "p" }];
+  const agents = [agent("t1", "p"), agent("t2", "p")];
+  assert.deepEqual(tabBarLabels(tabs, agents, [], { "project:p": ["t2", "t1"] }), ["All(2)", "+p(2)📌"]);
+  assert.deepEqual(tabBarLabels(tabs, agents, []), ["All(2)", "+p(2)"]);
 });

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { nextArrange, previewTree, crmuxLayout, findNode, sameTree, goTarget } from "../mods/crmux-list/arrange.js";
+import { nextArrange, previewTree, crmuxLayout, findNode, sameTree, goTarget, shownOrder } from "../mods/crmux-list/arrange.js";
 
 test("arrangements cycle MainV -> Single -> Grid -> EvenH -> EvenV -> MainH -> MainV", () => {
   const seen = ["MainV"];
@@ -335,4 +335,16 @@ test("go: Grid moves by row and column; into a shorter last row it lands on the 
 test("go: Single (one preview with no address) and an address not shown give null", () => {
   assert.equal(goTarget(previewTree("Single", ["t1", "t2"], "t1"), "t1", "right"), null);
   assert.equal(goTarget(previewTree("EvenH", ["t1", "t2"], "t1"), "t9", "right"), null);
+});
+
+// The order the previews are shown in, which a swap starts from: MainV / MainH put the main first and the rest in list
+// order (so pinning the order keeps what is in the main slot); the others follow the list
+test("shown order: MainV / MainH put the main first", () => {
+  assert.deepEqual(shownOrder("MainV", ["t1", "t2", "t3"], "t2"), ["t2", "t1", "t3"]);
+  assert.deepEqual(shownOrder("MainH", ["t1", "t2", "t3"], "t3"), ["t3", "t1", "t2"]);
+});
+
+test("shown order: the other arrangements (and a main not listed) keep the list's order", () => {
+  assert.deepEqual(shownOrder("Grid", ["t1", "t2", "t3"], "t2"), ["t1", "t2", "t3"]);
+  assert.deepEqual(shownOrder("MainV", ["t1", "t2"], "t9"), ["t1", "t2"]);
 });

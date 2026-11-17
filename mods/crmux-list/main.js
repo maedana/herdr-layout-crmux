@@ -11,10 +11,10 @@ import {
   formatElapsed, shouldPulse, trackStatuses, statusKind, statusIcon, projectName, parseRepo, sortByProject, cardLabel, cycle,
   pickSelected, nextSelection, exitedTerminals, closable, neighbour, previewLabels, findNewShell, shellCommand,
 } from "./cards.js";
-import { nextArrange, previewTree, crmuxLayout, findNode, sameTree, goTarget } from "./arrange.js";
+import { nextArrange, previewTree, crmuxLayout, findNode, sameTree, goTarget, shownOrder } from "./arrange.js";
 import {
   buildTabs, filterByTab, tabIndex, cycleTab, keepSelection, tabLabel, tabBarLabels, toggleMark, pruneMarks,
-  markPrefix,
+  markPrefix, tabKey, applyOrder, swapInOrder, pruneOrders,
 } from "./tabs.js";
 import { parseNumstat, diffSummary, diffTargets, diffKey, keepRepos } from "./diff.js";
 import { normalKey, scrollKey, scrollStep, scrollView, previewFocus, focusAction } from "./keys.js";
@@ -145,14 +145,22 @@ export default class CrmuxList extends View {
     return shared("crmux.marks") ?? [];
   }
 
-  // Tab list, current tab, and the agents filtered by that tab (targets of the list, numbers, j/k, t, and the preview)
+  // Each tab's own order (alt-shift-h/j/k/l): { [tabKey]: [addresses] }
+  orders() {
+    return shared("crmux.orders") ?? {};
+  }
+
+  // Tab list, current tab, and the agents filtered by that tab (targets of the list, numbers, j/k, t, and the preview), in
+  // the tab's own order when it has one (pinned; key: the tab's key in crmux.orders)
   view() {
     const all = this.items();
     const marks = this.marks();
     const tabs = buildTabs(all, marks);
     const index = tabIndex(tabs, shared("crmux.tab"));
     const tab = tabs[index];
-    return { all, marks, tabs, index, tab, items: filterByTab(all, tab, marks) };
+    const key = tabKey(tab);
+    const order = this.orders()[key];
+    return { all, marks, tabs, index, tab, key, pinned: Boolean(order), items: applyOrder(filterByTab(all, tab, marks), order) };
   }
 
   addresses() {
@@ -165,8 +173,10 @@ export default class CrmuxList extends View {
 
   // The agent shown large in MainV / MainH. Kept apart from the selection: a pick from the list moves both, but clicking a
   // preview only selects it in place (setSelection), so the terminal clicked does not jump into the main slot.
-  // Falls back to the selection when unset or no longer in the list (as nextSelection resolves it; previewTree takes it as is)
+  // Falls back to the selection when unset or no longer in the list (as nextSelection resolves it; previewTree takes it as is).
+  // A tab with its own order keeps its first one there, whatever is selected
   main(addresses = this.addresses()) {
+    if (this.view().pinned) return addresses[0] ?? null;
     const main = shared("crmux.main");
     return addresses.includes(main) ? main : this.selected(addresses);
   }
@@ -202,6 +212,8 @@ export default class CrmuxList extends View {
     const go = /^go-(left|right|up|down)$/.exec(name);
     // split-<direction>: the main layout's ctrl-t v / ctrl-t - (pane.split), bound for layout:crmux in keys.json
     const split = /^split-(right|down)$/.exec(name);
+    // swap-<direction>: the main layout's alt-shift-h/j/k/l (pane.swap), bound for layout:crmux in keys.json
+    const swap = /^swap-(left|right|up|down)$/.exec(name);
     // Leaving Scroll mode with i puts the preview back at the bottom (crmux reset_preview_scroll)
     if (name === "insert" && this.scrolling()) this.scrollPreview(sel, "bottom");
     if (name === "down") this.select(list[cycle(at, 1, list.length)], v.items);
@@ -222,6 +234,8 @@ export default class CrmuxList extends View {
     else if (split) this.openShell(split[1], sel, v.all);
     else if (pick) this.pick(pick[1], v.items);
     else if (go) this.go(go[1], sel, v.items);
+    else if (swap) this.swap(swap[1], sel, v);
+    else if (name === "unpin") this.unpin(v);
   }
 
   // A click on a card or a preview's title row: select that agent. Leave Insert first: in Insert, keepFocus puts the
@@ -331,6 +345,26 @@ export default class CrmuxList extends View {
       this.setSelection(target, { list: items.map((a) => a.address) });
       this.relayout(items);
     } else if (dir === "left") this.toList();
+  }
+
+  // The main layout's pane.swap, here: the selected preview trades places with its neighbour in dir, and the tab keeps that
+  // order from then on (pinned: its first one stays in the main slot whatever is selected; newcomers go last). It starts
+  // from the order shown (MainV / MainH: the main first), so pinning keeps what is in the main slot
+  swap(dir, sel, v) {
+    const target = goTarget(this.previewFor(v.items), sel, dir);
+    if (!target) return;
+    const list = v.items.map((a) => a.address);
+    const shown = shownOrder(this.arrange(), list, this.main(list));
+    setShared("crmux.orders", { ...this.orders(), [v.key]: swapInOrder(shown, sel, target) });
+    this.relayout();
+  }
+
+  // R: drop the tab's own order (back to the automatic order, and a list pick moves into the main slot again)
+  unpin(v) {
+    if (!v.pinned) return;
+    const { [v.key]: _dropped, ...rest } = this.orders();
+    setShared("crmux.orders", rest);
+    this.relayout();
   }
 
   // Space: toggle the mark on the selected one. An agent unmarked in the Marked tab disappears from the list
@@ -613,6 +647,13 @@ export default class CrmuxList extends View {
     if (next !== marks && all.length && !checking()) setShared("crmux.marks", next);
   }
 
+  // Drop terminals that are gone from the tabs' own orders (like marks; not while nothing is listed, e.g. at start)
+  dropGoneOrders(all) {
+    const orders = this.orders();
+    const next = pruneOrders(orders, all);
+    if (next !== orders && all.length && !checking()) setShared("crmux.orders", next);
+  }
+
   // If the current tab is gone, go back to All (and clear the saved one)
   resetTab(v) {
     const stored = shared("crmux.tab");
@@ -624,7 +665,9 @@ export default class CrmuxList extends View {
   // Publish the tab bar (labels with each tab's count, and the current index) for crmux-tabs to draw
   // (it replaces crmux's heading, so it is shown even with a single tab)
   publishTabBar(v) {
-    publishIfChanged("crmux.tabbar", { labels: tabBarLabels(v.tabs, v.all, v.marks), index: v.index });
+    publishIfChanged("crmux.tabbar", { labels: tabBarLabels(v.tabs, v.all, v.marks, this.orders()), index: v.index });
+    // Whether the shown tab has its own order, for the footer's R:Unpin
+    publishIfChanged("crmux.pinned", v.pinned);
   }
 
   // Publish the fixed part of each preview's title row (card label without the mark, worktree) for crmux-title to draw.
@@ -695,6 +738,7 @@ export default class CrmuxList extends View {
     // Clean up state-transition records and marks using all agents before filtering (so filtering does not drop records)
     const records = this.records(v.all);
     this.dropGoneMarks(v.all);
+    this.dropGoneOrders(v.all);
     this.resetTab(v);
     this.publishTabBar(v);
     this.publishTitles(items);

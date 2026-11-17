@@ -59,9 +59,49 @@ export function tabLabel(tab, count) {
   return count === undefined ? name : `${name}(${count})`;
 }
 
-// Labels for the tab bar: each tab with the number of agents it shows
-export function tabBarLabels(tabs, agents, marks) {
-  return tabs.map((tab) => tabLabel(tab, filterByTab(agents, tab, marks).length));
+// Labels for the tab bar: each tab with the number of agents it shows, and a pin when it has its own order (orders:
+// shared("crmux.orders"))
+export function tabBarLabels(tabs, agents, marks, orders = {}) {
+  return tabs.map((tab) => tabLabel(tab, filterByTab(agents, tab, marks).length) + (orders[tabKey(tab)] ? PIN : ""));
+}
+
+// --- A tab's own order (array of addresses per tab in shared("crmux.orders"): { [tabKey]: [addresses] }) ---
+// alt-shift-h/j/k/l swaps previews, which saves the tab's shown order; R drops it (back to the list's automatic order)
+
+const PIN = "📌";
+
+// Key of a tab in crmux.orders (the space by its id, which a rename does not change; the project by its name)
+export function tabKey(tab) {
+  return tab.kind === "space" || tab.kind === "project" ? `${tab.kind}:${tab.value}` : tab.kind;
+}
+
+// The tab's list in its own order: the saved ones first, in the saved order, then the ones not saved yet (newcomers) in the
+// list's order. The list itself when the tab has no order
+export function applyOrder(items, order) {
+  if (!order) return items;
+  const at = new Map(order.map((address, i) => [address, i]));
+  const saved = items.filter((a) => at.has(a.address)).sort((x, y) => at.get(x.address) - at.get(y.address));
+  return [...saved, ...items.filter((a) => !at.has(a.address))];
+}
+
+// The shown order (addresses) with a and b trading places
+export function swapInOrder(addresses, a, b) {
+  return addresses.map((x) => (x === a ? b : x === b ? a : x));
+}
+
+// Drop terminals that are gone from every order, and the order of a tab left with none. Returns the same object if
+// unchanged (=== lets callers skip writing to shared), empty if nothing is saved
+export function pruneOrders(orders, items) {
+  if (!orders) return {};
+  const alive = new Set(items.map((a) => a.address));
+  let changed = false;
+  const next = {};
+  for (const [key, order] of Object.entries(orders)) {
+    const kept = order.filter((a) => alive.has(a));
+    if (kept.length !== order.length) changed = true;
+    if (kept.length) next[key] = kept;
+  }
+  return changed ? next : orders;
 }
 
 // --- Marks (array of addresses in shared("crmux.marks")) ---

@@ -24,3 +24,8 @@ test("Scroll: -- SCROLL -- in bold with the scroll keys (crmux footer_spans Inpu
 test("show as Normal when the mode is unknown", () => {
   assert.equal(text(footerParts(undefined, "MainV")), text(footerParts("normal", "MainV")));
 });
+
+test("Normal on a tab with its own order: R to drop it is shown", () => {
+  assert.equal(text(footerParts("normal", "Single", true)),
+    "crmux | hjkl/1-9/t:Nav C-u:ScrollUp Space:Mark n:Shell x:Close(shell) v:Single i:Insert q:Main R:Unpin");
+});

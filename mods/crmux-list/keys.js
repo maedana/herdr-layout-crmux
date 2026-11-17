@@ -16,6 +16,7 @@ const CTRL = { u: "scroll-up", d: "scroll-down" };
 function lookup(table, k, m, gg) {
   if (m.control) return CTRL[k] ?? null;
   if (k === "G" || (k === "g" && m.shift)) return "bottom";
+  if (table === NORMAL && (k === "R" || (k === "r" && m.shift))) return "unpin";
   if (m.shift) return null;
   if (gg) return "top";
   return table[k] ?? null;

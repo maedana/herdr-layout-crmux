@@ -1,6 +1,7 @@
 // Footer text (crmux ui.rs footer_spans adapted for herdr). The renderer decorates using bold / app
 
-export function footerParts(mode, nextArrange) {
+// pinned: the shown tab has its own order (R drops it)
+export function footerParts(mode, nextArrange, pinned = false) {
   if (mode === "insert") {
     return [{ text: "-- INSERT --", bold: true }, { text: " | Typing goes to the agent. Esc:Back" }];
   }
@@ -12,6 +13,6 @@ export function footerParts(mode, nextArrange) {
   }
   return [
     { text: "crmux", app: true },
-    { text: ` | hjkl/1-9/t:Nav C-u:ScrollUp Space:Mark n:Shell x:Close(shell) v:${nextArrange} i:Insert q:Main` },
+    { text: ` | hjkl/1-9/t:Nav C-u:ScrollUp Space:Mark n:Shell x:Close(shell) v:${nextArrange} i:Insert q:Main${pinned ? " R:Unpin" : ""}` },
   ];
 }

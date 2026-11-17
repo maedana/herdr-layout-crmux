@@ -192,3 +192,12 @@ export function goTarget(tree, from, dir) {
   }
   return best?.address ?? null;
 }
+
+// The order the previews are shown in (what a swap starts from): MainV / MainH show the main first, then the rest in list
+// order; the other arrangements follow the list. A main not in the list changes nothing
+export function shownOrder(arrange, addresses, main) {
+  if ((arrange === "MainV" || arrange === "MainH") && addresses.includes(main)) {
+    return [main, ...addresses.filter((a) => a !== main)];
+  }
+  return addresses;
+}
