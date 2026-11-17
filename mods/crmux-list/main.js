@@ -215,6 +215,9 @@ export default class CrmuxList extends View {
     const at = Math.max(0, list.indexOf(sel));
     const select = /^select-([1-9])$/.exec(name);
     const tabNo = /^tab-(\d+)$/.exec(name);
+    // tab-select-<n>: the main layout's ctrl-t <n> (tab.select, from 1), bound for layout:crmux in keys.json. Like h / l it
+    // keeps the mode (tab-<n> is a click, which leaves Insert)
+    const tabSelect = /^tab-select-([1-9]\d*)$/.exec(name);
     // pick-<address> (a click on a preview's title row); the address may contain / (another machine's machine/t7)
     const pick = /^pick-(.+)$/.exec(name);
     // go-<direction>: the main layout's pane keys (alt-h/j/k/l, ctrl-t h/j/k/l), bound for layout:crmux in keys.json
@@ -238,6 +241,7 @@ export default class CrmuxList extends View {
     else if (name === "tab-next") this.switchTab(1, sel);
     else if (name === "tab-prev") this.switchTab(-1, sel);
     else if (tabNo) this.clickTab(v.tabs[Number(tabNo[1])], sel);
+    else if (tabSelect) this.selectTab(v.tabs[Number(tabSelect[1]) - 1], sel);
     else if (name === "close") this.closeExited(sel, list);
     else if (name === "shell") this.openShell("tab", sel, v.all);
     else if (split) this.openShell(split[1], sel, v.all);

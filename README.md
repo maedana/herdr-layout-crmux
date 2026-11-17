@@ -110,6 +110,9 @@ in Insert): `ctrl-t c` opens it in a new background tab (like `n`), `ctrl-t v` /
 tab it came from, to the right / below (`pane.split` with that pane named, since a layout terminal block has no pane of its
 own). The new shell is then selected and Insert entered.
 
+Switching tabs with the main layout's `ctrl-t 1`–`ctrl-t 9` (`tab.select`): the n-th tab in the tab bar (from 1), like
+`h` / `l` (the mode stays as it was; the selection stays if it is in the new tab, else the first one).
+
 Arranging a tab by hand with the main layout's `alt-shift-h/j/k/l` (`pane.swap`): the selected preview trades places with
 its neighbour that way, starting from the order shown (in MainV / MainH the main first, so what is in the main slot stays).
 The tab then keeps that order (saved per tab in `shared.json`, so it survives a restart) and shows a `📌` in the tab bar:
@@ -119,7 +122,7 @@ tab's order and goes back to the automatic one (the footer shows `R:Unpin` on su
 
 The same actions can be run from a shell while the layout is shown, e.g.
 `herdr-app do crmux-list.arrange`, `crmux-list.down`, `crmux-list.select-2`, `crmux-list.normal`,
-`crmux-list.mark`, `crmux-list.tab-next`, `crmux-list.tab-prev`, `crmux-list.tab-<n>` (0 = the first tab; what a tab click sends), `crmux-list.scroll-up`, `crmux-list.line-down`, `crmux-list.close`, `crmux-list.shell`, `crmux-list.go-left` (`-right`, `-up`, `-down`), `crmux-list.split-right` (`-down`), `crmux-list.swap-left` (`-right`, `-up`, `-down`), `crmux-list.unpin`, `crmux-list.hint`.
+`crmux-list.mark`, `crmux-list.tab-next`, `crmux-list.tab-prev`, `crmux-list.tab-<n>` (0 = the first tab; what a tab click sends), `crmux-list.tab-select-<n>` (1 = the first tab, keeps the mode), `crmux-list.scroll-up`, `crmux-list.line-down`, `crmux-list.close`, `crmux-list.shell`, `crmux-list.go-left` (`-right`, `-up`, `-down`), `crmux-list.split-right` (`-down`), `crmux-list.swap-left` (`-right`, `-up`, `-down`), `crmux-list.unpin`, `crmux-list.hint`.
 
 ## Install
 
@@ -147,7 +150,16 @@ Add to `~/.config/herdr-app/keys.json`:
     "alt-shift-h": "crmux-list.swap-left",
     "alt-shift-j": "crmux-list.swap-down",
     "alt-shift-k": "crmux-list.swap-up",
-    "alt-shift-l": "crmux-list.swap-right"
+    "alt-shift-l": "crmux-list.swap-right",
+    "ctrl-t 1": "crmux-list.tab-select-1",
+    "ctrl-t 2": "crmux-list.tab-select-2",
+    "ctrl-t 3": "crmux-list.tab-select-3",
+    "ctrl-t 4": "crmux-list.tab-select-4",
+    "ctrl-t 5": "crmux-list.tab-select-5",
+    "ctrl-t 6": "crmux-list.tab-select-6",
+    "ctrl-t 7": "crmux-list.tab-select-7",
+    "ctrl-t 8": "crmux-list.tab-select-8",
+    "ctrl-t 9": "crmux-list.tab-select-9"
   }
 }
 ```
