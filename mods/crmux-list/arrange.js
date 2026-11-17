@@ -98,7 +98,7 @@ export function crmuxLayout(preview) {
     children: [
       { id: "header", type: "block", size: { px: 34 }, background: "chrome", window_drag: true, content: { mod: "crmux-tabs" } },
       {
-        id: "body", type: "row", gap: 6,
+        id: "body", type: "row", gap: 6, padding: 6,
         children: [
           { id: "list", type: "block", size: { px: 280 }, background: "chrome", window_drag: true, content: { mod: "crmux-list" } },
           preview,

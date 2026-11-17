@@ -205,6 +205,8 @@ test("whole layout: root is a column: header (tab bar) on top, body (list on the
   assert.equal(body.type, "row");
   // A small gap between the list and the preview
   assert.equal(body.gap, 6);
+  // ...and the same space inside its edge, so the list's and previews' frames do not sit on the dividers or the window edge
+  assert.equal(body.padding, 6);
   assert.deepEqual(body.children[0].content, { mod: "crmux-list" });
   // A mod block does not honor `focus`, so the list draws its own border (accent while it has the keyboard)
   assert.equal("border" in body.children[0], false);

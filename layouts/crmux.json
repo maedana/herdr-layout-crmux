@@ -19,6 +19,7 @@
       "id": "body",
       "type": "row",
       "gap": 6,
+      "padding": 6,
       "children": [
         {
           "id": "list",
