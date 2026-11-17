@@ -35,6 +35,16 @@ and a vim-like Normal / Insert mode.
   MainV → Single → Grid → EvenH → EvenV → MainH (Main* put the selected agent in the main slot).
   Only the agents in the current tab are shown, numbered and navigated.
 
+## Borders
+
+The list and every preview terminal have a 1px border. The accent (blue) border is where the keys go:
+the list in Normal / Scroll, the selected agent's terminal in Insert. (The preview blocks use the layout's `focus`
+border; the list is a mod block, which does not honor it, so the mod re-sets the layout on each mode change: the list
+border is accent in Normal / Scroll and plain in Insert.) In a multi-pane arrangement the selected
+preview has a light border while the list has the keyboard (so you can still see which one `i` will enter),
+and the others are gray. Clicking a preview moves the keyboard there, so it is treated as Insert: that agent
+becomes the selection (the footer shows `-- INSERT --`). Click the list or press `Esc` to go back to Normal.
+
 ## Keys
 
 Normal (the list has the keyboard):

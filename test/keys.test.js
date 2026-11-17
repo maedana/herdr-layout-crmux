@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalKey, scrollKey, scrollStep, scrollView } from "../mods/crmux-list/keys.js";
+import { normalKey, scrollKey, scrollStep, scrollView, previewFocus, listRegained } from "../mods/crmux-list/keys.js";
 
 const plain = { control: false, shift: false };
 const ctrl = { control: true, shift: false };
@@ -93,4 +93,30 @@ test("view: page is the terminal's rows and max the history above one page; defa
   assert.deepEqual(scrollView(panes, "p1"), { page: 79, max: 4663 });
   assert.deepEqual(scrollView(panes, "p2"), { page: 40, max: 0 });
   assert.deepEqual(scrollView(panes, "missing"), { page: 40, max: 0 });
+});
+
+// Keyboard in a preview terminal block (e.g. clicked) while the list is not focused: the preview's address, else null
+const ADDRS = ["t1", "t2"];
+
+test("previewFocus: a layout terminal block of a listed agent holds the keyboard (list not focused) -> its address", () => {
+  assert.equal(previewFocus({ terminal: "t2", pane: null }, false, ADDRS), "t2");
+});
+
+test("previewFocus: null when the list is focused, nothing is focused, or the focus is a real pane", () => {
+  assert.equal(previewFocus({ terminal: "t2", pane: null }, true, ADDRS), null);
+  assert.equal(previewFocus(null, false, ADDRS), null);
+  assert.equal(previewFocus(undefined, false, ADDRS), null);
+  assert.equal(previewFocus({ terminal: "t2", pane: "p1" }, false, ADDRS), null);
+});
+
+test("previewFocus: null when the focused terminal is not in the list (e.g. another tab)", () => {
+  assert.equal(previewFocus({ terminal: "t9", pane: null }, false, ADDRS), null);
+});
+
+// The list holds the keyboard while it thinks it is Insert (e.g. a card was clicked): go back to Normal
+test("listRegained: true only when in Insert and the list holds the keyboard", () => {
+  assert.equal(listRegained(true, true), true);
+  assert.equal(listRegained(true, false), false);
+  assert.equal(listRegained(false, true), false);
+  assert.equal(listRegained(false, false), false);
 });

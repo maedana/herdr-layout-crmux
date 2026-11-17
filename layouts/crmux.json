@@ -25,11 +25,14 @@
           "size": { "px": 280 },
           "background": "chrome",
           "window_drag": true,
+          "border": { "width": 1, "color": "accent" },
           "content": { "mod": "crmux-list" }
         },
         {
           "id": "preview",
           "type": "block",
+          "border": { "width": 1, "color": "border" },
+          "focus": { "border": { "width": 1, "color": "accent" } },
           "content": { "agent": "focused" }
         }
       ]

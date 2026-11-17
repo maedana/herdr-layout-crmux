@@ -10,13 +10,21 @@ export function nextArrange(arrange) {
 // Tree for the right side (id "preview"). addresses is in list order, selected is the selected address
 const GAP = 4;
 
-const single = (content = { agent: "focused" }) => ({ id: "preview", type: "block", content });
+// Borders show where the keyboard is: every block keeps a 1px border (so nothing resizes) that turns accent while the
+// focused pane is inside it (node-level focus). The selected preview in a multi-pane display has a light border instead
+const border = (color) => ({ width: 1, color });
+const FOCUS = { border: { width: 1, color: "accent" } };
 
-// Terminal block for one agent. The selected one gets an accent border
+const single = (content = { agent: "focused" }) => ({
+  id: "preview", type: "block", border: border("border"), focus: FOCUS, content,
+});
+
+// Terminal block for one agent. The selected one has a light border (accent only while the keyboard is inside)
 function cell(address, selected, extra = {}) {
   return {
     id: `pv-${address.replace(/[^A-Za-z0-9_-]/g, "_")}`, type: "block", ...extra,
-    border: { width: 1, color: address === selected ? "accent" : "border" },
+    border: border(address === selected ? "foreground" : "border"),
+    focus: FOCUS,
     content: { terminal: address },
   };
 }
@@ -64,8 +72,10 @@ function gridTree(cells) {
   return split("column", rows, { id: "preview" });
 }
 
-// Whole crmux layout passed to layout.set (only preview is swapped). layouts/crmux.json is the same as this with Single
-export function crmuxLayout(preview) {
+// Whole crmux layout passed to layout.set (only preview is swapped). layouts/crmux.json is the same as this with Single.
+// The list is a mod block, which does not honor `focus`, so its border color is set from the mode instead (accent while
+// the list has the keyboard: Normal / Scroll; plain in Insert). The width stays 1 so nothing resizes
+export function crmuxLayout(preview, listFocused = true) {
   return {
     id: "root", type: "column", titlebar: "none", traffic_lights: [12, 16],
     background: "canvas", terminal_padding: [14, 12], divider: { width: 1, color: "border" },
@@ -74,7 +84,10 @@ export function crmuxLayout(preview) {
       {
         id: "body", type: "row",
         children: [
-          { id: "list", type: "block", size: { px: 280 }, background: "chrome", window_drag: true, content: { mod: "crmux-list" } },
+          {
+            id: "list", type: "block", size: { px: 280 }, background: "chrome", window_drag: true,
+            border: border(listFocused ? "accent" : "border"), content: { mod: "crmux-list" },
+          },
           preview,
         ],
       },

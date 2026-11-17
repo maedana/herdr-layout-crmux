@@ -52,3 +52,16 @@ export function scrollView(panes, pane) {
   const s = panes.find((p) => p.pane === pane)?.scroll;
   return s ? { page: s.len, max: Math.max(0, s.total - s.len) } : { page: 40, max: 0 };
 }
+
+// The keyboard is in a preview terminal block (e.g. it was clicked) while the list is not focused: that preview's address, else null.
+// focused is herdr's focused(): a layout terminal block has a terminal and no pane. Only listed agents count (not another tab's)
+export function previewFocus(focused, listFocused, addresses) {
+  if (!focused || focused.pane !== null || listFocused) return null;
+  return addresses.includes(focused.terminal) ? focused.terminal : null;
+}
+
+// The list holds the keyboard while it thinks it is Insert (e.g. a card was clicked, which only focuses the list): back to Normal.
+// listFocused is the list's focus handle's is_focused()
+export function listRegained(insert, listFocused) {
+  return insert && listFocused;
+}
