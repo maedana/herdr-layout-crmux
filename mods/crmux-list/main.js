@@ -9,7 +9,7 @@ import {
 } from "herdr";
 import {
   formatElapsed, shouldPulse, trackStatuses, statusKind, statusIcon, projectName, parseRepo, sortByProject, cardLabel, cycle,
-  pickSelected, exitedTerminals, neighbour,
+  pickSelected, exitedTerminals, neighbour, previewLabels,
 } from "./cards.js";
 import { nextArrange, previewTree, crmuxLayout, findNode, sameTree } from "./arrange.js";
 import {
@@ -179,6 +179,8 @@ export default class CrmuxList extends View {
     const at = Math.max(0, list.indexOf(sel));
     const select = /^select-([1-9])$/.exec(name);
     const tabNo = /^tab-(\d+)$/.exec(name);
+    // pick-<address> (a click on a preview's title row); the address may contain / (another machine's machine/t7)
+    const pick = /^pick-(.+)$/.exec(name);
     // Leaving Scroll mode with i puts the preview back at the bottom (crmux reset_preview_scroll)
     if (name === "insert" && this.scrolling()) this.scrollPreview(sel, "bottom");
     if (name === "down") this.select(list[cycle(at, 1, list.length)]);
@@ -195,6 +197,14 @@ export default class CrmuxList extends View {
     else if (name === "tab-prev") this.switchTab(-1, sel);
     else if (tabNo) this.clickTab(this.view().tabs[Number(tabNo[1])], sel);
     else if (name === "close") this.closeExited(sel, list);
+    else if (pick) this.pick(pick[1]);
+  }
+
+  // A click on a card or a preview's title row: select that agent. Leave Insert first: in Insert, keepFocus puts the
+  // keyboard back in the terminal, not the list (leaving Insert already reclaims the keyboard for the list)
+  pick(address) {
+    if (!this.leaveInsert()) this.handle.focus();
+    this.select(address);
   }
 
   select(address) {
@@ -502,6 +512,15 @@ export default class CrmuxList extends View {
     setShared("crmux.tabbar", bar);
   }
 
+  // Publish the fixed part of each preview's title row (card label without the mark, worktree) for crmux-title to draw.
+  // The terminal title and state change often, so crmux-title reads those from agents() / panes() itself. Written only when changed
+  publishTitles(items) {
+    if (checking()) return;
+    const titles = previewLabels(items);
+    if (JSON.stringify(titles) === JSON.stringify(shared("crmux.titles"))) return;
+    setShared("crmux.titles", titles);
+  }
+
   // git diff summary at the card's bottom-left
   diff(t, a) {
     const parts = a.cwd ? this.diffs[diffKey(a.machine, a.cwd)] : null;
@@ -530,10 +549,7 @@ export default class CrmuxList extends View {
       .cursor_pointer()
       .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
       .on_click((_e, cx) => {
-        // Leave Insert before selecting: in Insert, keepFocus puts the keyboard back in the terminal, not the list
-        // (leaving Insert already reclaims the keyboard for the list)
-        if (!this.leaveInsert()) this.handle.focus();
-        this.select(a.address);
+        this.pick(a.address);
         cx.notify();
       })
       .child(frame)
@@ -565,6 +581,7 @@ export default class CrmuxList extends View {
     this.dropGoneMarks(v.all);
     this.resetTab(v);
     this.publishTabBar(v);
+    this.publishTitles(items);
     const now = Date.now();
     setAgentOrder(v.all.map((a) => a.address));
     const at = list.indexOf(sel);

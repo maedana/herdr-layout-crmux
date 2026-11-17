@@ -10,23 +10,37 @@ export function nextArrange(arrange) {
 // Tree for the right side (id "preview"). addresses is in list order, selected is the selected address
 const GAP = 4;
 
-// Borders show where the keyboard is: every preview block keeps a 1px border (so nothing resizes) that turns accent while
+// Borders show where the keyboard is: every preview keeps a 1px border (so nothing resizes) that turns accent while
 // the focused pane is inside it (node-level focus). The selected preview in a multi-pane display has a light border instead
 const border = (color) => ({ width: 1, color });
 const FOCUS = { border: { width: 1, color: "accent" } };
+// Height of the title row above each preview terminal
+const TITLE_PX = 20;
 
-const single = (content = { agent: "focused" }) => ({
-  id: "preview", type: "block", border: border("border"), focus: FOCUS, content,
-});
-
-// Terminal block for one agent. The selected one has a light border (accent only while the keyboard is inside)
-function cell(address, selected, extra = {}) {
+// A preview: a column of the title row (crmux-title mod, "> N.project/branch - title" like crmux's preview border title)
+// and the terminal block. frame (size, border, focus) goes on the column, so the border surrounds the title row too.
+// titleProps is what the title row is given ({} follows crmux.selected)
+function titled(id, titleProps, content, frame) {
   return {
-    id: `pv-${address.replace(/[^A-Za-z0-9_-]/g, "_")}`, type: "block", ...extra,
+    id, type: "column", ...frame,
+    children: [
+      { id: `${id}-title`, type: "block", size: { px: TITLE_PX }, background: "background", content: { mod: "crmux-title", ...titleProps } },
+      { id: `${id}-body`, type: "block", content },
+    ],
+  };
+}
+
+// Single's title row is given no address: it follows crmux.selected, so a j/k (agent.focus) does not need a layout.set
+const single = (content = { agent: "focused" }) => titled("preview", {}, content, { border: border("border"), focus: FOCUS });
+
+// Preview for one agent. The selected one has a light border (accent only while the keyboard is inside)
+function cell(address, selected, extra = {}) {
+  const id = `pv-${address.replace(/[^A-Za-z0-9_-]/g, "_")}`;
+  return titled(id, { props: { address } }, { terminal: address }, {
+    ...extra,
     border: border(address === selected ? "foreground" : "border"),
     focus: FOCUS,
-    content: { terminal: address },
-  };
+  });
 }
 
 const split = (type, children, extra = {}) => ({ type, gap: GAP, ...extra, children });

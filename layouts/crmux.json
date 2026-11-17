@@ -29,10 +29,23 @@
         },
         {
           "id": "preview",
-          "type": "block",
+          "type": "column",
           "border": { "width": 1, "color": "border" },
           "focus": { "border": { "width": 1, "color": "accent" } },
-          "content": { "agent": "focused" }
+          "children": [
+            {
+              "id": "preview-title",
+              "type": "block",
+              "size": { "px": 20 },
+              "background": "background",
+              "content": { "mod": "crmux-title" }
+            },
+            {
+              "id": "preview-body",
+              "type": "block",
+              "content": { "agent": "focused" }
+            }
+          ]
         }
       ]
     },

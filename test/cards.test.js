@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatElapsed, statusKind, shouldPulse, trackStatuses, projectName, parseRepo, sortByProject, cardLabel, statusIcon, cycle, pickSelected, exitedTerminals, neighbour } from "../mods/crmux-list/cards.js";
+import { formatElapsed, statusKind, shouldPulse, trackStatuses, projectName, parseRepo, sortByProject, cardLabel, previewLabels, statusIcon, cycle, pickSelected, exitedTerminals, neighbour } from "../mods/crmux-list/cards.js";
 
 test("under 60 seconds is shown as seconds, right-aligned to 2 digits", () => {
   assert.equal(formatElapsed(5), " 5s");
@@ -178,6 +178,18 @@ test("card top: with no branch, a worktree is shown as /worktree (crmux format_t
 
 test("card top: no number from the 10th on (cannot be selected with keys 1-9)", () => {
   assert.equal(cardLabel({ selected: false, index: 9, project: "x", branch: "b" }), "x/b");
+});
+
+test("preview labels: each listed agent's card label without the selection mark, and its worktree, by address", () => {
+  const items = [
+    { address: "t1", project: "crmux", branch: "main", worktree: null },
+    { address: "vps/t7", project: "app", branch: null, worktree: "wt" },
+  ];
+  assert.deepEqual(previewLabels(items), {
+    t1: { label: "1.crmux/main", worktree: null },
+    "vps/t7": { label: "2.app/wt", worktree: "wt" },
+  });
+  assert.deepEqual(previewLabels([]), {});
 });
 
 test("state icons: working ⚡, waiting for input ⚠, idle / done 💤", () => {

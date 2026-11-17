@@ -99,6 +99,15 @@ export function cardLabel({ selected, index, project, branch, worktree }) {
   return `${selected ? "> " : ""}${number}${project}${suffix ? `/${suffix}` : ""}`;
 }
 
+// Fixed part of each preview's title row, published as crmux.titles for crmux-title: { [address]: { label, worktree } }.
+// label is the card label without the selection mark (crmux-title adds it from crmux.selected). items is the current tab's list
+export function previewLabels(items) {
+  return Object.fromEntries(items.map((a, index) => [a.address, {
+    label: cardLabel({ selected: false, index, project: a.project, branch: a.branch, worktree: a.worktree }),
+    worktree: a.worktree ?? null,
+  }]));
+}
+
 const ICONS = { working: "⚡", blocked: "⚠", idle: "💤", exited: "⏹" };
 
 // State icon at the right of the card's bottom edge (crmux ui.rs state_label)

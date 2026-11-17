@@ -12,17 +12,27 @@ test("the next of an unknown arrangement is MainV (crmux's default)", () => {
   assert.equal(nextArrange(undefined), "MainV");
 });
 
-// Every preview block has a border that turns accent while the keyboard is inside it (the list draws its own border)
+// Every preview is a column of a title row (crmux-title mod) and the terminal block. The border goes around both (the
+// column) and turns accent while the keyboard is inside it (the list draws its own border)
 const FOCUS = { border: { width: 1, color: "accent" } };
 const BORDER = { width: 1, color: "border" };
-const FOCUSED = { id: "preview", type: "block", border: BORDER, focus: FOCUS, content: { agent: "focused" } };
+const TITLE_PX = 20;
+const titled = (id, titleProps, content, frame) => ({
+  id, type: "column", ...frame,
+  children: [
+    { id: `${id}-title`, type: "block", size: { px: TITLE_PX }, background: "background", content: { mod: "crmux-title", ...titleProps } },
+    { id: `${id}-body`, type: "block", content },
+  ],
+});
+// Single's title row gets no address and follows crmux.selected, so moving the selection does not change the tree
+const FOCUSED = titled("preview", {}, { agent: "focused" }, { border: BORDER, focus: FOCUS });
 
 test("Single is one agent block (selection is switched with agent.focus)", () => {
   assert.deepEqual(previewTree("Single", ["t1", "t2"], "t1"), FOCUSED);
 });
 
 // A shell is not an agent (agent.focus cannot show it), so an exited selection is shown as its terminal
-const EXITED = (address) => ({ id: "preview", type: "block", border: BORDER, focus: FOCUS, content: { terminal: address } });
+const EXITED = (address) => titled("preview", {}, { terminal: address }, { border: BORDER, focus: FOCUS });
 
 test("Single with an exited selection shows that terminal instead of the focused agent", () => {
   assert.deepEqual(previewTree("Single", ["t1", "t2"], "t2", ["t2"]), EXITED("t2"));
@@ -38,13 +48,14 @@ test("with one agent or fewer, every arrangement is the same as Single", () => {
   assert.deepEqual(previewTree("Grid", [], null), FOCUSED);
 });
 
-// Blocks for multi-pane display: bordered, the selected one has a light border (accent only while the keyboard is inside)
-const cell = (address, selected, extra = {}) => ({
-  id: `pv-${address}`, type: "block", ...extra,
+// Previews for multi-pane display: bordered, the selected one has a light border (accent only while the keyboard is inside).
+// The title row is given the address it shows
+const cell = (address, selected, extra = {}) => titled(`pv-${address}`, { props: { address } }, { terminal: address }, {
+  ...extra,
   border: { width: 1, color: selected ? "foreground" : "border" },
   focus: FOCUS,
-  content: { terminal: address },
 });
+const body = (node) => node.children[1];
 
 test("EvenH splits horizontally in list order", () => {
   assert.deepEqual(previewTree("EvenH", ["t1", "t2", "t3"], "t2"), {
@@ -63,7 +74,27 @@ test("EvenV splits vertically in list order", () => {
 test("block ids replace non-alphanumerics (such as the / in another machine's machine/t7) with _", () => {
   const tree = previewTree("EvenH", ["vps/t7", "t1"], "t1");
   assert.equal(tree.children[0].id, "pv-vps_t7");
-  assert.deepEqual(tree.children[0].content, { terminal: "vps/t7" });
+  assert.equal(tree.children[0].children[0].id, "pv-vps_t7-title");
+  assert.deepEqual(tree.children[0].children[0].content.props, { address: "vps/t7" });
+  assert.deepEqual(body(tree.children[0]), { id: "pv-vps_t7-body", type: "block", content: { terminal: "vps/t7" } });
+});
+
+test("the title row is a fixed 20px chrome strip above the terminal; size, border and focus are on the column around both", () => {
+  const main = previewTree("MainV", ["t1", "t2"], "t1").children[0];
+  assert.equal(main.type, "column");
+  assert.deepEqual(main.size, { weight: 7 });
+  assert.deepEqual(main.border, { width: 1, color: "foreground" });
+  assert.deepEqual(main.focus, FOCUS);
+  const [title, term] = main.children;
+  assert.deepEqual(title, {
+    id: "pv-t1-title", type: "block", size: { px: 20 }, background: "background", content: { mod: "crmux-title", props: { address: "t1" } },
+  });
+  assert.equal("border" in term, false);
+  assert.equal("focus" in term, false);
+});
+
+test("Single: moving the selection keeps the same tree (the title row follows crmux.selected)", () => {
+  assert.deepEqual(previewTree("Single", ["t1", "t2"], "t1"), previewTree("Single", ["t1", "t2"], "t2"));
 });
 
 test("MainV: selected as the left main (70%), the rest stacked vertically on the right in list order", () => {
@@ -88,11 +119,11 @@ test("MainH: selected as the top main (60%), the rest side by side below", () =>
 
 test("Main variants: if the selection is not in the list, the first becomes the main", () => {
   const tree = previewTree("MainV", ["t1", "t2"], "t9");
-  assert.deepEqual(tree.children[0].content, { terminal: "t1" });
-  assert.deepEqual(tree.children[1].children.map((c) => c.content.terminal), ["t2"]);
+  assert.deepEqual(body(tree.children[0]).content, { terminal: "t1" });
+  assert.deepEqual(tree.children[1].children.map((c) => body(c).content.terminal), ["t2"]);
 });
 
-const gridShape = (tree) => tree.children.map((row) => row.children.map((c) => c.content.terminal));
+const gridShape = (tree) => tree.children.map((row) => row.children.map((c) => body(c).content.terminal));
 
 test("Grid: columns are ceil(sqrt(n)), rows fill from the top, the remainder goes in the last row", () => {
   assert.deepEqual(gridShape(previewTree("Grid", ["t1", "t2", "t3", "t4", "t5"], "t1")), [["t1", "t2", "t3"], ["t4", "t5"]]);
@@ -134,7 +165,7 @@ test("layouts/crmux.json (the initial layout) is the same as Single's crmuxLayou
 
 test("findNode finds a node by id (null if missing)", () => {
   const root = crmuxLayout(previewTree("EvenH", ["t1", "t2"], "t1"));
-  assert.equal(findNode(root, "pv-t2").content.terminal, "t2");
+  assert.equal(findNode(root, "pv-t2-body").content.terminal, "t2");
   assert.equal(findNode(root, "nope"), null);
   assert.equal(findNode(null, "x"), null);
 });
