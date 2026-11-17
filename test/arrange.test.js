@@ -290,7 +290,7 @@ test("sameTree: false if the contents differ", () => {
   assert.equal(sameTree(previewTree("EvenH", ["t1", "t2"], "t1"), null), false);
 });
 
-// Moving between previews with the main layout's pane keys (alt-h/j/k/l): the neighbour in that direction, from where the
+// Moving between previews (crmux-list.go-*, the stand-in for pane.go, which fails from a layout block): the neighbour in that direction, from where the
 // arrangement puts each preview (weights included). null when there is none that way (left of the leftmost: the list)
 test("go: EvenH moves left / right along the row, nothing up / down", () => {
   const tree = previewTree("EvenH", ["t1", "t2", "t3"], "t2");

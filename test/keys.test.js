@@ -31,9 +31,8 @@ test("Normal: x closes the selected one (main.js only closes exited ones)", () =
   assert.equal(normalKey("x", shift, false), null);
 });
 
-test("Normal: n opens a new shell (in the selected one's folder)", () => {
-  assert.equal(normalKey("n", plain, false), "shell");
-  assert.equal(normalKey("n", shift, false), null);
+test("Normal: n does nothing (a new shell is crmux-list.shell, bound to a key in keys.json)", () => {
+  assert.equal(normalKey("n", plain, false), null);
 });
 
 test("Normal: R (shift-r) drops the tab's own order (back to the automatic one)", () => {

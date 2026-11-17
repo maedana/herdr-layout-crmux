@@ -134,7 +134,7 @@ export function sameTree(a, b) {
   return ka.every((k) => sameTree(a[k], b[k]));
 }
 
-// --- Moving between previews (the main layout's pane keys, alt-h/j/k/l) ---
+// --- Moving between previews (crmux-list.go-* / swap-*, the stand-ins for pane.go / pane.swap) ---
 
 const EPS = 1e-9;
 

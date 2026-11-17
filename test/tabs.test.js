@@ -6,7 +6,7 @@ import { buildTabs, filterByTab, tabIndex, cycleTab, keepSelection, tabLabel, ta
 const agent = (address, project, space = "s1", spaceName = "main", spaceIndex = 1) =>
   ({ address, project, space, spaceName, spaceIndex });
 
-test("tabs: All, Agents (always, so ctrl-t 2 stays put) and a +project per project (ascending, no duplicates)", () => {
+test("tabs: All, Agents (always, so tab-select-2 stays put) and a +project per project (ascending, no duplicates)", () => {
   const tabs = buildTabs([agent("t1", "zeta"), agent("t2", "alpha"), agent("t3", "zeta")], []);
   assert.deepEqual(tabs, [
     { kind: "all" },
@@ -135,7 +135,7 @@ test("start of the card body: * if marked, otherwise 2 spaces (crmux ui.rs mark_
   assert.equal(markPrefix(false), "  ");
 });
 
-// --- A tab's own order (alt-shift-h/j/k/l swaps previews; shared("crmux.orders"): { [tabKey]: [addresses] }) ---
+// --- A tab's own order (crmux-list.swap-* swaps previews; shared("crmux.orders"): { [tabKey]: [addresses] }) ---
 
 test("tab key: one per tab, stable across renders (the space by its id, the project by its name)", () => {
   assert.equal(tabKey({ kind: "all" }), "all");

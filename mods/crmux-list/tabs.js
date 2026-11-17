@@ -13,7 +13,7 @@ function spaceTabs(agents) {
 }
 
 // Tab list (crmux state.rs rebuild_tabs): All -> Agents -> Marked (if any marks) -> @space (if 2 or more) -> +project.
-// Agents is always there (even with no shell to leave out), so ctrl-t 1 / ctrl-t 2 stay on All / Agents
+// Agents is always there (even with no shell to leave out), so tab-select-1 / tab-select-2 stay on All / Agents
 export function buildTabs(agents, marks) {
   const marked = agents.some((a) => marks.includes(a.address));
   const spaces = spaceTabs(agents);
@@ -70,7 +70,7 @@ export function tabBarLabels(tabs, agents, marks, orders = {}) {
 }
 
 // --- A tab's own order (array of addresses per tab in shared("crmux.orders"): { [tabKey]: [addresses] }) ---
-// alt-shift-h/j/k/l swaps previews, which saves the tab's shown order; R drops it (back to the list's automatic order)
+// crmux-list.swap-* swaps previews, which saves the tab's shown order; R drops it (back to the list's automatic order)
 
 const PIN = "📌";
 

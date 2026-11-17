@@ -18,7 +18,7 @@ export function statusKind(status) {
 }
 
 // Plain shells: no status, live, and shown in a pane (parked ones have none). Both the shell an exited agent left behind
-// and a shell that never ran an agent (turn 0, e.g. one opened with n to start a server): crmux does not tell them apart.
+// and a shell that never ran an agent (turn 0, e.g. one opened with crmux-list.shell to start a server): crmux does not tell them apart.
 // What runs in front is not checked here: right after an agent exits the pane's program can still say the agent for a
 // moment, which would make the card blink out and back. x checks it instead (closable).
 // Returns [{ address, pane }] in terminals() order, where pane is the panes() entry showing it
@@ -29,16 +29,16 @@ export function exitedTerminals(terminals, panes) {
     .map((t) => ({ address: t.address, pane: byTerminal.get(t.address) }));
 }
 
-// The shell n opened (tab.new gives no address back): the first plain shell in pending.space that was not listed when n
-// was pressed (pending.known). null while it has not shown up yet, or when nothing is pending
+// The shell openShell opened (no address comes back): the first plain shell in pending.space that was not listed when it was
+// opened (pending.known). null while it has not shown up yet, or when nothing is pending
 export function findNewShell(pending, items) {
   if (!pending) return null;
   const known = new Set(pending.known);
   return items.find((a) => a.status === "exited" && a.space === pending.space && !known.has(a.address))?.address ?? null;
 }
 
-// The app command that opens a new shell for card (the selected one; null when there is none). how: "tab" (n / ctrl-t c: a
-// background tab in its space, starting in its folder; with no card, in shownSpace) or "right" / "down" (ctrl-t v / ctrl-t -:
+// The app command that opens a new shell for card (the selected one; null when there is none). how: "tab" (crmux-list.shell: a
+// background tab in its space, starting in its folder; with no card, in shownSpace) or "right" / "down" (crmux-list.split-*:
 // split the pane it is in; a layout terminal block has no pane of its own, so the pane is named). null when there is nothing
 // to open it in
 export function shellCommand(how, card, shownSpace = null) {

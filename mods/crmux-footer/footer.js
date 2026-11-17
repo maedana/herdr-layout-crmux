@@ -16,6 +16,6 @@ export function footerParts(mode, nextArrange, pinned = false) {
   }
   return [
     { text: "crmux", app: true },
-    { text: ` | hjkl/1-9/t:Nav f:Hint C-u:ScrollUp Space:Mark n:Shell x:Close(shell) v:${nextArrange} i:Insert q:Main${pinned ? " R:Unpin" : ""}` },
+    { text: ` | hjkl/1-9/t:Nav f:Hint C-u:ScrollUp Space:Mark x:Close(shell) v:${nextArrange} i:Insert q:Main${pinned ? " R:Unpin" : ""}` },
   ];
 }

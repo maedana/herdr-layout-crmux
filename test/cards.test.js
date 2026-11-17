@@ -339,10 +339,10 @@ test("an unset selection resolves to herdr's focused agent: selecting it stores 
   );
 });
 
-// The shell n opened: herdr gives no address back, so it is found as the first shell in that space that was not there before
+// The shell crmux-list.shell / split-* opened: herdr gives no address back, so it is found as the first shell in that space that was not there before
 const shellItem = (address, extra = {}) => ({ address, status: "exited", space: "s1", ...extra });
 
-test("new shell: the first shell in the space that was not listed when n was pressed", () => {
+test("new shell: the first shell in the space that was not listed when the key was pressed", () => {
   const items = [shellItem("t1"), { address: "t2", status: "idle", space: "s1" }, shellItem("t3", { space: "s2" }), shellItem("t4"), shellItem("t5")];
   assert.equal(findNewShell({ space: "s1", known: ["t1"] }, items), "t4");
 });
@@ -353,8 +353,8 @@ test("new shell: none yet (still starting, or only agents / other spaces are new
   assert.equal(findNewShell(null, items), null);
 });
 
-// How a new shell is opened for the selected card (n / ctrl-t c: a background tab in its space, in its folder; ctrl-t v /
-// ctrl-t -: a split of the pane it is in, like the main layout's pane.split, which needs the pane named from a layout block)
+// How a new shell is opened for the selected card (crmux-list.shell: a background tab in its space, in its folder; split-right /
+// split-down: a split of the pane it is in, like herdr-app's pane.split, which needs the pane named from a layout block)
 const card = { address: "t3", pane: "p3", space: "s1", cwd: "/w/app" };
 
 test("shell command: a tab opens in the card's space and folder, in the background", () => {

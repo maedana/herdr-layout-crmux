@@ -33,7 +33,7 @@ const SETTLE_MS = 300;
 // Pulse for waiting-for-input / just-finished (crmux swings the border between 50-100% with sin(t*16), a period of about 0.4s)
 const PULSE = { from: 0.5, to: 1, period: 400 };
 const EMOJI_FONT = "Noto Color Emoji";
-// How long openShell (n, ctrl-t c / v / -) waits for the shell it opened to show up before giving up on selecting it
+// How long openShell (crmux-list.shell / split-*) waits for the shell it opened to show up before giving up on selecting it
 const NEW_SHELL_MS = 10000;
 // Size of the program icon before a card's label (the preview's title row uses 14 for 12px text)
 const ICON_PX = 14;
@@ -150,7 +150,7 @@ export default class CrmuxList extends View {
     return shared("crmux.marks") ?? [];
   }
 
-  // Each tab's own order (alt-shift-h/j/k/l): { [tabKey]: [addresses] }
+  // Each tab's own order (crmux-list.swap-*): { [tabKey]: [addresses] }
   orders() {
     return shared("crmux.orders") ?? {};
   }
@@ -215,16 +215,16 @@ export default class CrmuxList extends View {
     const at = Math.max(0, list.indexOf(sel));
     const select = /^select-([1-9])$/.exec(name);
     const tabNo = /^tab-(\d+)$/.exec(name);
-    // tab-select-<n>: the main layout's ctrl-t <n> (tab.select, from 1), bound for layout:crmux in keys.json. Like h / l it
+    // tab-select-<n>: like herdr-app's tab.select (from 1), for a key bound under layout:crmux in keys.json. Like h / l it
     // keeps the mode (tab-<n> is a click, which leaves Insert)
     const tabSelect = /^tab-select-([1-9]\d*)$/.exec(name);
     // pick-<address> (a click on a preview's title row); the address may contain / (another machine's machine/t7)
     const pick = /^pick-(.+)$/.exec(name);
-    // go-<direction>: the main layout's pane keys (alt-h/j/k/l, ctrl-t h/j/k/l), bound for layout:crmux in keys.json
+    // go-<direction>: the stand-in for herdr-app's pane.go (which fails from a layout block), for a key bound under layout:crmux
     const go = /^go-(left|right|up|down)$/.exec(name);
-    // split-<direction>: the main layout's ctrl-t v / ctrl-t - (pane.split), bound for layout:crmux in keys.json
+    // split-<direction>: herdr-app's pane.split on the selected one's pane, for a key bound under layout:crmux
     const split = /^split-(right|down)$/.exec(name);
-    // swap-<direction>: the main layout's alt-shift-h/j/k/l (pane.swap), bound for layout:crmux in keys.json
+    // swap-<direction>: the stand-in for herdr-app's pane.swap, for a key bound under layout:crmux
     const swap = /^swap-(left|right|up|down)$/.exec(name);
     // Leaving Scroll mode with i puts the preview back at the bottom (crmux reset_preview_scroll)
     if (name === "insert" && this.scrolling()) this.scrollPreview(sel, "bottom");
@@ -313,8 +313,8 @@ export default class CrmuxList extends View {
     this.focusAgent(next);
   }
 
-  // A new plain shell for the selected one (to start a server or run a command outside the agents). how: "tab" (n / ctrl-t c:
-  // a background tab in its space, in its folder) or "right" / "down" (ctrl-t v / ctrl-t -: split the pane it is in, in the
+  // A new plain shell for the selected one (to start a server or run a command outside the agents). how: "tab" (crmux-list.shell:
+  // a background tab in its space, in its folder) or "right" / "down" (crmux-list.split-*: split the pane it is in, in the
   // tab it came from). The app gives no address back, so tick picks the shell up when it shows up in that space
   // (adoptNewShell), selects it and enters Insert
   openShell(how, sel, all) {
@@ -344,7 +344,7 @@ export default class CrmuxList extends View {
     return true;
   }
 
-  // The main layout's pane keys, here: pane.go does not work from a layout terminal block, so the list moves the keyboard
+  // The stand-in for herdr-app's pane.go: pane.go does not work from a layout terminal block, so the list moves the keyboard
   // between the previews itself. In Insert: to the preview next to the one being typed into (selected in place, like a
   // click; it stays Insert), or back to the list going left from the leftmost (or from Single). In Normal: right enters
   // the selected preview (like i); the other directions do nothing
@@ -361,7 +361,7 @@ export default class CrmuxList extends View {
     } else if (dir === "left") this.toList();
   }
 
-  // The main layout's pane.swap, here: the selected preview trades places with its neighbour in dir, and the tab keeps that
+  // The stand-in for herdr-app's pane.swap: the selected preview trades places with its neighbour in dir, and the tab keeps that
   // order from then on (pinned: its first one stays in the main slot whatever is selected; newcomers go last). It starts
   // from the order shown (MainV / MainH: the main first), so pinning keeps what is in the main slot
   swap(dir, sel, v) {

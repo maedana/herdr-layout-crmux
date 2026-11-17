@@ -13,7 +13,7 @@ and a vim-like Normal / Insert mode.
 ## What you see
 
 - A tab bar in a full-width header row at the top of the window (above the list and the preview), with the number of agents in each tab:
-  `All(N)`, `Agents(N)` (the agents only, without the plain shells; always there, so `ctrl-t 2` stays on it), `Marked(N)` (only while something is marked), `@space(N)` (one per space, only with 2+ spaces),
+  `All(N)`, `Agents(N)` (the agents only, without the plain shells; always there, so `crmux-list.tab-select-2` stays on it), `Marked(N)` (only while something is marked), `@space(N)` (one per space, only with 2+ spaces),
   `+project(N)` (one per project). Tabs are drawn as rounded boxes and the current one is filled; when the bar is too wide it
   scrolls horizontally to keep the current tab visible. Click a tab to switch to it (like `h` / `l`);
   clicking a tab while a terminal has the keyboard (Insert) returns to Normal.
@@ -30,7 +30,7 @@ and a vim-like Normal / Insert mode.
 - Card colors follow the theme (`working` / `blocked` / `idle`). Waiting cards pulse; a card that
   was working pulses for 5–15 seconds after it stops.
 - Plain shells are listed too: every live terminal shown in a pane that is not an agent (no status). That is both the
-  shell an agent leaves behind when it exits and a shell that never ran an agent (e.g. one opened with `n` to start a
+  shell an agent leaves behind when it exits and a shell that never ran an agent (e.g. one opened with `crmux-list.shell` to start a
   server); crmux does not tell them apart. They are dimmed cards (`muted`) without the state and elapsed time at the bottom
   right (those are for agents), grouped by project like the agents (so a `+project` tab shows that repository's agents and shells together).
   Selecting one shows the shell in the preview; `x` closes its terminal (and its pane, or its tab if it was the last pane).
@@ -68,13 +68,12 @@ Normal (the list has the keyboard):
 | `f` | Hint: label every card, shown preview and tab, then type a label to jump there (see below) |
 | `h` / `←`, `l` / `→` | previous / next tab (wraps); the selection stays if the agent is in the new tab, else the first one |
 | `Space` | mark / unmark the selected agent (unmarking the last one on the `Marked` tab goes back to `All`) |
-| `n` | open a plain shell in a new background tab of the selected one's space, in its folder, then select it and enter Insert (to run a server or a command outside the agents) |
 | `x` | close the selected shell's terminal (no confirmation) and select the next card; does nothing on a live agent, or while something other than the shell runs in front (vim, a server, an agent starting up) |
 | `i` | Insert: move the keyboard to the selected agent's terminal |
 | `v` | next arrangement |
 | `ctrl-u` / `g g` | scroll the preview half a page up / to the top and enter Scroll |
 | `ctrl-d` / `G` | scroll the preview half a page down / to the bottom |
-| `R` | drop the tab's own order (from `alt-shift-h/j/k/l`) and go back to the automatic order |
+| `R` | drop the tab's own order (from `crmux-list.swap-*`) and go back to the automatic order |
 | `q` | switch to the `main` layout and focus the agent's pane |
 | `Esc` | right after leaving Insert: send `Esc Esc` to the agent and go back to Insert |
 
@@ -100,21 +99,24 @@ no label has cancels.
 Insert (a terminal has the keyboard): `Esc` returns to Normal (needs the `keys.json` entry below).
 Plain `Esc` therefore no longer reaches the program in this layout; press `Esc` twice to send it.
 
-Moving between panes with the main layout's `ctrl-t h/j/k/l` (`pane.go` does not work from a layout terminal block, so they
-are bound to `crmux-list.go-left` etc. in the `keys.json` entries below; other keys can be bound the same way): in Insert, the keyboard moves to the preview next
-to the one being typed into (it is selected in place and stays Insert), and going left from the leftmost one (or in Single)
-returns to the list (Normal). In Normal, right enters the selected preview (like `i`).
+The previews are layout terminal blocks, not panes of a tab, so herdr-app's pane commands (`pane.go`, `pane.split`,
+`pane.swap`) fail while one has the keyboard. crmux-list has commands that do the same here instead; bind them in
+`keys.json` under `layout:crmux` (no key is bound by default). A natural choice is the keys you already use for those
+herdr-app commands under `global`, which the example below does with `ctrl-t` and `alt-shift`. They work in Normal and
+Insert alike, on the selected one (in Insert, the preview being typed into):
 
-Opening a shell with the main layout's keys, in Normal and Insert alike, for the selected one (the preview being typed into
-in Insert): `ctrl-t c` opens it in a new background tab (like `n`), `ctrl-t v` / `ctrl-t -` split the pane it is in, in the
-tab it came from, to the right / below (`pane.split` with that pane named, since a layout terminal block has no pane of its
-own). The new shell is then selected and Insert entered.
+| Command | Like | Does |
+|---|---|---|
+| `crmux-list.go-left` / `-right` / `-up` / `-down` | `pane.go` | In Insert, moves the keyboard to the preview next to the one being typed into (selected in place, it stays Insert); left of the leftmost one (or in Single) returns to the list (Normal). In Normal, right enters the selected preview (like `i`) |
+| `crmux-list.shell` | `tab.new` | Opens a plain shell in a new background tab of the selected one's space, in its folder (to run a server or a command outside the agents) |
+| `crmux-list.split-right` / `-down` | `pane.split` | Splits the pane the selected one is in, in the tab it came from, and opens a shell there (`pane.split` with that pane named, which works from a layout block) |
+| `crmux-list.tab-select-<n>` | `tab.select` | Switches to the n-th tab in the tab bar (from 1), like `h` / `l` (the mode stays; the selection stays if it is in the new tab, else the first one) |
+| `crmux-list.swap-left` / `-right` / `-up` / `-down` | `pane.swap` | Arranges the tab by hand (below) |
 
-Switching tabs with the main layout's `ctrl-t 1`–`ctrl-t 9` (`tab.select`): the n-th tab in the tab bar (from 1), like
-`h` / `l` (the mode stays as it was; the selection stays if it is in the new tab, else the first one).
+A shell opened with `crmux-list.shell` or `split-*` is selected and Insert is entered once it shows up.
 
-Arranging a tab by hand with the main layout's `alt-shift-h/j/k/l` (`pane.swap`): the selected preview trades places with
-its neighbour that way, starting from the order shown (in MainV / MainH the main first, so what is in the main slot stays).
+Arranging a tab by hand (`crmux-list.swap-*`): the selected preview trades places with its neighbour that way, starting
+from the order shown (in MainV / MainH the main first, so what is in the main slot stays).
 The tab then keeps that order (saved per tab in `shared.json`, so it survives a restart) and shows a `📌` in the tab bar:
 its cards are numbered in that order, its first one stays in the main slot whatever you select (a pick from the list only
 selects it), and newcomers (a new shell, a new agent) go last. Closed terminals drop out of it. `R` in Normal drops the
@@ -130,7 +132,8 @@ The same actions can be run from a shell while the layout is shown, e.g.
 ./install.sh   # copies layouts/ and mods/ into ~/.config/herdr-app (or $HERDR_APP_HOME)
 ```
 
-Add to `~/.config/herdr-app/keys.json`:
+Add to `~/.config/herdr-app/keys.json`, for example (`escape` is needed for Insert; the other keys are up to you, these
+match the `ctrl-t` / `alt-shift` keys bound to herdr-app's own commands under `global`):
 
 ```json
 {
