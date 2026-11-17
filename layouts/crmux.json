@@ -8,6 +8,14 @@
   "divider": { "width": 1, "color": "border" },
   "children": [
     {
+      "id": "header",
+      "type": "block",
+      "size": { "px": 28 },
+      "background": "chrome",
+      "window_drag": true,
+      "content": { "mod": "crmux-tabs" }
+    },
+    {
       "id": "body",
       "type": "row",
       "children": [

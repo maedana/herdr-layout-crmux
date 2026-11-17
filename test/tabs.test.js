@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildTabs, filterByTab, tabIndex, cycleTab, keepSelection, tabLabel, tabBarLabels, tabBarWindow, toggleMark, pruneMarks, markPrefix } from "../mods/crmux-list/tabs.js";
+import { buildTabs, filterByTab, tabIndex, cycleTab, keepSelection, tabLabel, tabBarLabels, toggleMark, pruneMarks, markPrefix } from "../mods/crmux-list/tabs.js";
 
 // Agents in the list (part of the shape of items() in main.js)
 const agent = (address, project, space = "s1", spaceName = "main", spaceIndex = 1) =>
@@ -99,32 +99,6 @@ test("tabBarLabels: each tab with the number of agents it shows", () => {
   const agents = [agent("t1", "crmux", "s1", "home", 1), agent("t2", "dotfiles", "s1", "home", 1), agent("t3", "crmux", "s2", "work", 2)];
   const tabs = buildTabs(agents, ["t2"]);
   assert.deepEqual(tabBarLabels(tabs, agents, ["t2"]), ["All(3)", "Marked(1)", "@home(2)", "@work(1)", "+crmux(2)", "+dotfiles(1)"]);
-});
-
-const barText = (segs) => segs.map((s) => s.text).join("");
-
-test("tab bar: all if they fit, the selected one is [name] with selected, one space between", () => {
-  const segs = tabBarWindow(["All", "Marked", "+a"], 1, 40);
-  assert.equal(barText(segs), "All [Marked] +a");
-  assert.deepEqual(segs.filter((s) => s.selected).map((s) => s.text), ["[Marked]"]);
-  assert.equal(segs.some((s) => s.arrow), false);
-});
-
-const LONG = ["All", "+alpha", "+beta", "+gamma", "+delta"];
-
-test("tab bar: if they do not fit, cut out around the selected one and show < and > at both ends", () => {
-  const segs = tabBarWindow(LONG, 2, 16);
-  assert.equal(barText(segs), "< ha [+beta] + >");
-  assert.deepEqual(segs.filter((s) => s.arrow).map((s) => s.text), ["< ", " >"]);
-  assert.deepEqual(segs.filter((s) => s.selected).map((s) => s.text), ["[+beta]"]);
-});
-
-test("tab bar: no left < when the first tab is selected", () => {
-  assert.equal(barText(tabBarWindow(LONG, 0, 16)), "[All] +alpha + >");
-});
-
-test("tab bar: no right > when the last tab is selected", () => {
-  assert.equal(barText(tabBarWindow(LONG, 4, 16)), "< a [+delta]");
 });
 
 test("marks: add if absent, remove if present (the original array is not changed)", () => {

@@ -4,13 +4,14 @@ A [crmux](https://github.com/maedana/crmux)-style layout for the Herdr desktop a
 a card list of your coding agents on the left, live previews of their terminals on the right,
 and a vim-like Normal / Insert mode.
 
-- `layouts/crmux.json` — the layout (`crmux`): list | preview, with a footer
+- `layouts/crmux.json` — the layout (`crmux`): a header row, then list | preview, then a footer
+- `mods/crmux-tabs/` — the tab bar (full-width header row)
 - `mods/crmux-list/` — the agent cards and Normal-mode keys
 - `mods/crmux-footer/` — mode and key hints
 
 ## What you see
 
-- A tab bar with the number of agents in each tab:
+- A tab bar in a full-width header row at the top of the window (above the list and the preview), with the number of agents in each tab:
   `All(N)`, `Marked(N)` (only while something is marked), `@space(N)` (one per space, only with 2+ spaces),
   `+project(N)` (one per project). The current tab is shown as `[name(N)]`; when the bar is too wide it
   scrolls to keep the current tab in the middle and shows `<` / `>`.
@@ -90,14 +91,14 @@ Add to `~/.config/herdr-app/keys.json`:
 Note: changing the arrangement uses `layout.set`, which rewrites
 `~/.config/herdr-app/layouts/crmux.json`. Running `./install.sh` resets it to the initial
 (Single) layout; the list restores your arrangement the next time it starts.
-State (selection, arrangement, status times, marks, current tab) is kept in Herdr's shared state
+State (selection, arrangement, status times, marks, current tab, the tab bar's labels) is kept in Herdr's shared state
 (`crmux.*`), so it survives switching layouts. Marks of agents that are gone are dropped.
 
 ## Development
 
 ```sh
-node --test                                   # pure logic: mods/crmux-list/{cards,arrange,tabs,diff}.js, footer
-./install.sh && herdr-app check ~/.config/herdr-app/mods/crmux-list
+node --test                                   # pure logic: mods/crmux-list/{cards,arrange,tabs,diff}.js, crmux-tabs/tabbar.js, footer
+./install.sh && for m in crmux-list crmux-tabs crmux-footer; do herdr-app check ~/.config/herdr-app/mods/$m; done
 ```
 
 ## License

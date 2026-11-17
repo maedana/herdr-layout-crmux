@@ -91,13 +91,16 @@ test("Grid: outer is a vertical stack of rows, each row is horizontal (id is pv-
   });
 });
 
-test("whole layout: root is a column, top is body (list on the left, preview on the right), bottom is the footer", () => {
+test("whole layout: root is a column: header (tab bar) on top, body (list on the left, preview on the right) in the middle, footer at the bottom", () => {
   const preview = previewTree("Single", [], null);
   const root = crmuxLayout(preview);
   assert.equal(root.id, "root");
   assert.equal(root.type, "column");
-  assert.deepEqual(root.children.map((c) => c.id), ["body", "footer"]);
-  const [body, footer] = root.children;
+  assert.deepEqual(root.children.map((c) => c.id), ["header", "body", "footer"]);
+  const [header, body, footer] = root.children;
+  assert.deepEqual(header, {
+    id: "header", type: "block", size: { px: 28 }, background: "chrome", window_drag: true, content: { mod: "crmux-tabs" },
+  });
   assert.equal(body.type, "row");
   assert.deepEqual(body.children[0].content, { mod: "crmux-list" });
   assert.equal(body.children[1], preview);

@@ -1,6 +1,6 @@
 // crmux-style card list (left) and Normal mode key handling.
 // The preview on the right is the layout's agent / terminal blocks (real terminals); the arrangement is swapped with layout.set.
-// Switching layouts recreates this mod, so state to keep (selection, arrangement, transition records, marks, tabs) lives in shared.
+// Switching layouts recreates this mod, so state to keep (selection, arrangement, transition records, marks, tabs, tab bar) lives in shared.
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex, ScrollHandle } from "gpui-base";
 import {
@@ -13,7 +13,7 @@ import {
 } from "./cards.js";
 import { nextArrange, previewTree, crmuxLayout, findNode, sameTree } from "./arrange.js";
 import {
-  buildTabs, filterByTab, tabIndex, cycleTab, keepSelection, tabLabel, tabBarLabels, tabBarWindow, toggleMark, pruneMarks,
+  buildTabs, filterByTab, tabIndex, cycleTab, keepSelection, tabLabel, tabBarLabels, toggleMark, pruneMarks,
   markPrefix,
 } from "./tabs.js";
 import { parseNumstat, diffSummary, diffTargets, diffKey, keepRepos } from "./diff.js";
@@ -32,10 +32,6 @@ const PULSE = { from: 0.5, to: 1, period: 400 };
 const EMOJI_FONT = "Noto Color Emoji";
 // Interval to refresh the git diff summary (5 seconds, same as crmux app.rs)
 const DIFF_MS = 5000;
-// List width (the layout's list block) and the width of one character used to estimate tab bar characters (half-width of a 12px monospace font)
-const LIST_PX = 280;
-const LIST_PAD = 8;
-const CHAR_PX = 7.2;
 // diffSummary color role -> theme color name (ansi1 red, ansi2 green, ansi3 yellow)
 const DIFF_COLORS = { add: "ansi2", mod: "ansi3", del: "ansi1", dim: "muted" };
 
@@ -53,7 +49,6 @@ export default class CrmuxList extends View {
     // Lines the selected preview is scrolled up (Scroll mode while > 0)
     this.scrollUp = 0;
     this.tickSig = "";
-    this.width = LIST_PX;
     // git diff summary: diffKey(machine, cwd) -> diffSummary result (kept only inside the mod)
     this.diffs = {};
     this.diffSig = "";
@@ -388,15 +383,13 @@ export default class CrmuxList extends View {
     }
   }
 
-  // Tab bar with each tab's count (it replaces crmux's heading, so it is shown even with a single tab)
-  header(t, v) {
-    const chars = Math.floor((this.width - LIST_PAD * 2) / CHAR_PX);
-    const segs = tabBarWindow(tabBarLabels(v.tabs, v.all, v.marks), v.index, chars);
-    return h_flex().flex_none().px(LIST_PAD + 1).pt(LIST_PAD).overflow_hidden().whitespace_nowrap()
-      .children(segs.map((s) => div().flex_none().whitespace_nowrap()
-        .text_color(s.selected ? t.chrome : t.muted)
-        .when(s.selected, (d) => d.bg(t.foreground))
-        .child(s.text)));
+  // Publish the tab bar (labels with each tab's count, and the current index) for crmux-tabs to draw
+  // (it replaces crmux's heading, so it is shown even with a single tab). Written to shared only when changed
+  publishTabBar(v) {
+    if (checking()) return;
+    const bar = { labels: tabBarLabels(v.tabs, v.all, v.marks), index: v.index };
+    if (JSON.stringify(bar) === JSON.stringify(shared("crmux.tabbar"))) return;
+    setShared("crmux.tabbar", bar);
   }
 
   // git diff summary at the card's bottom-left
@@ -453,6 +446,7 @@ export default class CrmuxList extends View {
     const records = this.records(v.all);
     this.dropGoneMarks(v.all);
     this.resetTab(v);
+    this.publishTabBar(v);
     const now = Date.now();
     setAgentOrder(v.all.map((a) => a.address));
     const at = list.indexOf(sel);
@@ -463,12 +457,6 @@ export default class CrmuxList extends View {
     }
     return v_flex().id("crmux-list").track_focus(this.handle).size_full().min_h(0)
       .font_family(settings().font_family ?? "JetBrains Mono").text_size(12)
-      .on_size_change((size, cx) => {
-        // Used to estimate the tab bar's character count
-        if (Math.abs(size.width - this.width) < 1) return;
-        this.width = size.width;
-        cx.notify();
-      })
       .on_key_down((e, cx) => this.onKey(e, cx))
       .on_mouse_down("left", (_e, cx) => {
         // A click on the list's margin also returns to Normal (window_drag still works as is)
@@ -477,7 +465,6 @@ export default class CrmuxList extends View {
         this.handle.focus();
         cx.notify();
       })
-      .child(this.header(t, v))
       .child(v_flex().id("crmux-cards").flex_1().min_h(0).p(8).gap(6).overflow_y_scrollbar().track_scroll(this.scroll)
         .when(!items.length, (el) => el.child(div().p(4).text_color(t.muted).child("No agents")))
         .children(items.map((a, i) => this.card(t, a, i, a.address === sel, records[a.address], now, marks.includes(a.address)))));
