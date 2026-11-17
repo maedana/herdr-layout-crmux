@@ -26,6 +26,14 @@ function indicator(t, kind) {
   return div().size(7).flex_none().rounded(4).bg(t.done ?? t.muted);
 }
 
+// A hint label (f): the letters still to type of label, on the accent color; nothing when there is no label or it no longer
+// matches what has been typed (typed)
+function hintBadge(t, label, typed = "") {
+  if (!label || !label.startsWith(typed)) return null;
+  return div().flex_none().px(4).rounded(3).bg(t.accent ?? t.foreground).text_color(t.accent_foreground ?? t.background)
+    .font_bold().text_size(11).child(label.slice(typed.length));
+}
+
 export default class CrmuxTitle extends View {
   render() {
     const t = theme();
@@ -41,6 +49,9 @@ export default class CrmuxTitle extends View {
     const pane = address && !agent ? panes().find((p) => p.terminal === address) : null;
     const source = agent ?? pane;
     const pic = icon(source?.program, 14, t.dim ?? t.muted);
+    // The hint label (f) crmux-list gave this preview
+    const hints = shared("crmux.hints");
+    const badge = address && hints ? hintBadge(t, hints.previews?.[address], hints.typed) : null;
     const kind = statusIndicator(agent?.status);
     const nameColor = t[titleColorKey({ status: agent?.status, worktree: fixed?.worktree })] ?? t.foreground;
     // The top corners are rounded to sit inside the preview's rounded frame (crmux-list gives the radius: the frame's less
@@ -51,6 +62,7 @@ export default class CrmuxTitle extends View {
       .when(address !== null, (el) => el.cursor_pointer()
         .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
         .on_click(() => run(`crmux-list.pick-${address}`)))
+      .when(Boolean(badge), (el) => el.child(badge))
       .when(Boolean(pic), (el) => el.child(pic))
       .child(div().flex_none().truncate().max_w(260).font_medium().text_color(nameColor).child(fixed?.label ?? " "))
       .child(div().flex_1().truncate().text_color(t.dim ?? t.muted).child(source?.title || " "))

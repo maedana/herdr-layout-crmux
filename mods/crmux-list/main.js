@@ -18,6 +18,7 @@ import {
 } from "./tabs.js";
 import { parseNumstat, diffSummary, diffTargets, diffKey, keepRepos } from "./diff.js";
 import { normalKey, scrollKey, scrollStep, scrollView, previewFocus, focusAction } from "./keys.js";
+import { buildHints, hintKey, shownPreviews } from "./hints.js";
 
 const LAYOUT = "crmux";
 const DEFAULT_ARRANGE = "MainV";
@@ -64,9 +65,13 @@ export default class CrmuxList extends View {
     this.diffSig = "";
     // The shell openShell opened, until it shows up in the list: { space, known, until } (see findNewShell)
     this.pendingShell = null;
+    // Hint mode (f): buildHints' result while the labels are up, else null
+    this.hints = null;
     if (checking()) return;
 
     this.setInsert(false);
+    // Labels left up when the app quit mid-hint
+    this.publishHints();
     setShared("crmux.next", nextArrange(this.arrange()));
     this.handle.focus();
     // Focus may not take effect right after init (re-acquire a little later, as hop does), and layout() still returns the previous layout, so
@@ -189,6 +194,10 @@ export default class CrmuxList extends View {
       if (!this.insert) this.handle.focus();
       return;
     }
+    if (c === "normal" && this.hints) {
+      // The escape in keys.json reaches here before the list's own keys: it cancels the hints
+      return this.endHints();
+    }
     if (c === "normal") {
       // The escape in keys.json for layout:crmux. If we are in the right terminal, go back to the list (Insert -> Normal).
       // This command may also arrive while in the list (Esc in Normal)
@@ -236,6 +245,7 @@ export default class CrmuxList extends View {
     else if (go) this.go(go[1], sel, v.items);
     else if (swap) this.swap(swap[1], sel, v);
     else if (name === "unpin") this.unpin(v);
+    else if (name === "hint") this.startHints(v, sel);
   }
 
   // A click on a card or a preview's title row: select that agent. Leave Insert first: in Insert, keepFocus puts the
@@ -367,6 +377,52 @@ export default class CrmuxList extends View {
     this.relayout();
   }
 
+  // f: label every card, shown preview and tab (crmux.hints, which each mod draws; the footer shows -- HINT --). The keyboard
+  // stays in the list, whose onKey takes the typed letters (hintKey)
+  startHints(v, sel) {
+    const list = v.items.map((a) => a.address);
+    this.hints = buildHints({ cards: list, previews: shownPreviews(this.arrange(), list, sel), tabs: v.tabs.length });
+    this.publishHints();
+    setShared("crmux.mode", "hint");
+  }
+
+  publishHints() {
+    const h = this.hints;
+    setShared("crmux.hints", h ? { cards: h.cards, previews: h.previews, tabs: h.tabs, typed: h.typed } : null);
+  }
+
+  // Take the labels down (back to Normal)
+  endHints() {
+    this.hints = null;
+    this.publishHints();
+    setShared("crmux.mode", this.insert ? "insert" : "normal");
+  }
+
+  // A key in hint mode: wait for the next letter of a longer label, jump when one is complete, cancel otherwise
+  hintKeyDown(k, m) {
+    const res = m.control || m.shift ? { cancel: true } : hintKey(this.hints.targets, this.hints.typed, k);
+    if (res.typed !== undefined) {
+      this.hints.typed = res.typed;
+      return this.publishHints();
+    }
+    this.endHints();
+    if (res.target) this.jump(res.target);
+  }
+
+  // Where a label goes: a card is a pick from the list (like j/k), a preview is entered (like clicking it: selected in place,
+  // then Insert), a tab is switched to (like h / l)
+  jump(target) {
+    const v = this.view();
+    const sel = this.selected(v.items.map((a) => a.address));
+    if (target.kind === "card") this.select(target.key, v.items);
+    else if (target.kind === "tab") this.selectTab(v.tabs[target.key], sel);
+    else if (target.kind === "preview") {
+      if (this.scrolling()) this.scrollPreview(sel, "bottom");
+      this.setSelection(target.key, { list: v.items.map((a) => a.address) });
+      this.toInsert();
+    }
+  }
+
   // Space: toggle the mark on the selected one. An agent unmarked in the Marked tab disappears from the list
   // (removing the last mark removes the Marked tab and returns to All)
   markSelected(sel) {
@@ -495,6 +551,11 @@ export default class CrmuxList extends View {
   // Normal / Insert: the field and crmux.mode (which crmux-footer shows). The selected preview's frame follows the mode,
   // so the caller re-lays out
   setInsert(on) {
+    // Anything that changes the mode (a click on a preview, i) takes the labels down
+    if (this.hints) {
+      this.hints = null;
+      this.publishHints();
+    }
     this.insert = on;
     setShared("crmux.mode", on ? "insert" : "normal");
   }
@@ -570,6 +631,12 @@ export default class CrmuxList extends View {
     const m = e.modifiers;
     const k = e.key;
     if (m.alt || m.platform) return;
+    // Hint mode takes every key
+    if (this.hints) {
+      this.hintKeyDown(k, m);
+      cx.stop_propagation();
+      return cx.notify();
+    }
     // A key reached the list = Normal (e.g. returned by a click)
     this.leaveInsert();
     if (k !== "escape") this.escFromInsertAt = 0;
@@ -685,7 +752,8 @@ export default class CrmuxList extends View {
         .text_color(a.status === "exited" ? t.muted : t[DIFF_COLORS[p.color]] ?? t.muted).child(p.text)));
   }
 
-  card(t, a, index, selected, record, now, marked) {
+  // badge: the hint label (f) drawn at the top right, or null
+  card(t, a, index, selected, record, now, marked, badge = null) {
     const kind = statusKind(a.status);
     // An exited shell is drawn dimmed (frame, title and text in muted)
     const exited = kind === "exited";
@@ -708,6 +776,7 @@ export default class CrmuxList extends View {
         cx.notify();
       })
       .child(frame)
+      .when(Boolean(badge), (el) => el.child(div().absolute().top(4).right(8).child(badge)))
       .child(v_flex().px(9).py(5).gap(2)
         // Top: the program's icon (tells an agent from a shell at a glance), then the label
         .child(h_flex().min_w(0).gap(6).items_center()
@@ -766,7 +835,8 @@ export default class CrmuxList extends View {
       })
       .child(v_flex().id("crmux-cards").flex_1().min_h(0).p(8).gap(6).overflow_y_scrollbar().track_scroll(this.scroll)
         .when(!items.length, (el) => el.child(div().p(4).text_color(t.muted).child("No agents")))
-        .children(items.map((a, i) => this.card(t, a, i, a.address === sel, records[a.address], now, marks.includes(a.address)))));
+        .children(items.map((a, i) => this.card(t, a, i, a.address === sel, records[a.address], now, marks.includes(a.address),
+          this.hints ? hintBadge(t, this.hints.cards[a.address], this.hints.typed) : null))));
   }
 }
 
@@ -775,6 +845,14 @@ export default class CrmuxList extends View {
 function publishIfChanged(key, value) {
   if (checking() || JSON.stringify(value) === JSON.stringify(shared(key))) return;
   setShared(key, value);
+}
+
+// A hint label (f): the letters still to type of label, on the accent color; nothing when there is no label or it no longer
+// matches what has been typed (typed)
+function hintBadge(t, label, typed = "") {
+  if (!label || !label.startsWith(typed)) return null;
+  return div().flex_none().px(4).rounded(3).bg(t.accent ?? t.foreground).text_color(t.accent_foreground ?? t.background)
+    .font_bold().text_size(11).child(label.slice(typed.length));
 }
 
 // The program's icon, the same as the preview's title row and herdr's pane header: a one-color glyph is tinted, others are

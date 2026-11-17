@@ -5,6 +5,9 @@ export function footerParts(mode, nextArrange, pinned = false) {
   if (mode === "insert") {
     return [{ text: "-- INSERT --", bold: true }, { text: " | Typing goes to the agent. Esc:Back" }];
   }
+  if (mode === "hint") {
+    return [{ text: "-- HINT --", bold: true }, { text: " | Type a label to jump. Esc:Cancel" }];
+  }
   if (mode === "scroll") {
     return [
       { text: "-- SCROLL --", bold: true },
@@ -13,6 +16,6 @@ export function footerParts(mode, nextArrange, pinned = false) {
   }
   return [
     { text: "crmux", app: true },
-    { text: ` | hjkl/1-9/t:Nav C-u:ScrollUp Space:Mark n:Shell x:Close(shell) v:${nextArrange} i:Insert q:Main${pinned ? " R:Unpin" : ""}` },
+    { text: ` | hjkl/1-9/t:Nav f:Hint C-u:ScrollUp Space:Mark n:Shell x:Close(shell) v:${nextArrange} i:Insert q:Main${pinned ? " R:Unpin" : ""}` },
   ];
 }

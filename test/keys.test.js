@@ -42,6 +42,11 @@ test("Normal: R (shift-r) drops the tab's own order (back to the automatic one)"
   assert.equal(normalKey("r", plain, false), null);
 });
 
+test("Normal: f shows the hint labels", () => {
+  assert.equal(normalKey("f", plain, false), "hint");
+  assert.equal(normalKey("f", shift, false), null);
+});
+
 test("Scroll: j/k scroll the preview by one line instead of moving the selection (crmux handle_scroll_mode)", () => {
   assert.equal(scrollKey("j", plain, false), "line-down");
   assert.equal(scrollKey("down", plain, false), "line-down");

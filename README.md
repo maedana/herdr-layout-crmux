@@ -65,6 +65,7 @@ Normal (the list has the keyboard):
 | `j` / `↓`, `k` / `↑` | select next / previous (wraps) |
 | `1`–`9` | select by number |
 | `t` | toggle with the previous selection |
+| `f` | Hint: label every card, shown preview and tab, then type a label to jump there (see below) |
 | `h` / `←`, `l` / `→` | previous / next tab (wraps); the selection stays if the agent is in the new tab, else the first one |
 | `Space` | mark / unmark the selected agent (unmarking the last one on the `Marked` tab goes back to `All`) |
 | `n` | open a plain shell in a new background tab of the selected one's space, in its folder, then select it and enter Insert (to run a server or a command outside the agents) |
@@ -89,6 +90,13 @@ Scroll (the preview is scrolled up; `-- SCROLL --` in the footer):
 
 Other keys do nothing in Scroll. Selecting another agent (e.g. clicking a card) also puts the preview back at the bottom.
 
+Hint (`f` in Normal; `-- HINT --` in the footer): every card, every preview on screen and every tab gets a label on the
+accent color, the easiest keys first (`asdfghjkl`, then `qwertyuiop`, then `zxcvbnm`), cards first, then previews, then
+tabs. Up to 26 targets the labels are one letter; past that every label gets as many letters as it takes (two up to 676,
+then three...), and labels that no longer match what you typed disappear. Typing a card's label selects it (like `j`/`k`), a
+preview's enters it (like clicking it: selected in place, then Insert), a tab's switches to it (like `h`/`l`). `Esc` or a key
+no label has cancels.
+
 Insert (a terminal has the keyboard): `Esc` returns to Normal (needs the `keys.json` entry below).
 Plain `Esc` therefore no longer reaches the program in this layout; press `Esc` twice to send it.
 
@@ -111,7 +119,7 @@ tab's order and goes back to the automatic one (the footer shows `R:Unpin` on su
 
 The same actions can be run from a shell while the layout is shown, e.g.
 `herdr-app do crmux-list.arrange`, `crmux-list.down`, `crmux-list.select-2`, `crmux-list.normal`,
-`crmux-list.mark`, `crmux-list.tab-next`, `crmux-list.tab-prev`, `crmux-list.tab-<n>` (0 = the first tab; what a tab click sends), `crmux-list.scroll-up`, `crmux-list.line-down`, `crmux-list.close`, `crmux-list.shell`, `crmux-list.go-left` (`-right`, `-up`, `-down`), `crmux-list.split-right` (`-down`), `crmux-list.swap-left` (`-right`, `-up`, `-down`), `crmux-list.unpin`.
+`crmux-list.mark`, `crmux-list.tab-next`, `crmux-list.tab-prev`, `crmux-list.tab-<n>` (0 = the first tab; what a tab click sends), `crmux-list.scroll-up`, `crmux-list.line-down`, `crmux-list.close`, `crmux-list.shell`, `crmux-list.go-left` (`-right`, `-up`, `-down`), `crmux-list.split-right` (`-down`), `crmux-list.swap-left` (`-right`, `-up`, `-down`), `crmux-list.unpin`, `crmux-list.hint`.
 
 ## Install
 

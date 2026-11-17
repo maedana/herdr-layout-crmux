@@ -5,7 +5,7 @@
 const NORMAL = {
   j: "down", down: "down", k: "up", up: "up", t: "toggle", i: "insert", v: "arrange", q: "main",
   h: "tab-prev", left: "tab-prev", l: "tab-next", right: "tab-next", space: "mark",
-  x: "close", n: "shell", escape: "esc",
+  x: "close", n: "shell", f: "hint", escape: "esc",
 };
 // Scroll mode (entered with C-u / gg): j/k scroll the preview instead of moving the selection; other keys are ignored
 const SCROLL = {
