@@ -49,28 +49,31 @@ const split = (type, children, extra = {}) => ({ type, gap: GAP, ...extra, child
 
 // exited: addresses of exited shells (not agents, so agent.focus cannot put them in the Single agent block; show the terminal itself).
 // insert: the list is in Insert (the selected preview is being typed into, so its frame is accent)
-export function previewTree(arrange, addresses, selected, exited = [], insert = false) {
+// main: the address shown large in MainV / MainH (defaults to selected). Separate from selected so that clicking a
+// preview can select it in place without moving it into the main slot; borders always follow selected
+export function previewTree(arrange, addresses, selected, exited = [], insert = false, main = selected) {
   if (arrange === "Single" || addresses.length <= 1) {
     return exited.includes(selected) ? single(insert, { terminal: selected }) : single(insert);
   }
   const cells = addresses.map((a) => cell(a, selected, insert));
   if (arrange === "EvenH") return split("row", cells, { id: "preview" });
   if (arrange === "EvenV") return split("column", cells, { id: "preview" });
-  if (arrange === "MainV" || arrange === "MainH") return mainTree(arrange, addresses, selected, insert);
+  if (arrange === "MainV" || arrange === "MainH") return mainTree(arrange, addresses, selected, insert, main);
   if (arrange === "Grid") return gridTree(cells);
   return single(insert);
 }
 
-// MainV / MainH: selected agent as the main pane (crmux moves the selected one to the front). The main ratio is
+// MainV / MainH: the main agent (normally the selected one; crmux moves the selected one to the front) as the main pane. The main ratio is
 // picked by crmux's MainV from the content width (60-80%); here the width is unknown, so it is fixed at 70%. MainH is 60%
 const MAIN = {
   MainV: { type: "row", rest: "column", main: 7, other: 3 },
   MainH: { type: "column", rest: "row", main: 6, other: 4 },
 };
 
-function mainTree(arrange, addresses, selected, insert) {
+function mainTree(arrange, addresses, selected, insert, wanted) {
   const m = MAIN[arrange];
-  const main = addresses.includes(selected) ? selected : addresses[0];
+  // main if listed, else the selection, else the first
+  const main = [wanted, selected].find((a) => addresses.includes(a)) ?? addresses[0];
   const rest = addresses.filter((a) => a !== main).map((a) => cell(a, selected, insert));
   return split(m.type, [
     cell(main, selected, insert, { size: { weight: m.main } }),

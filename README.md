@@ -36,6 +36,7 @@ and a vim-like Normal / Insert mode.
 - The right side shows real terminals. `v` cycles the arrangement:
   MainV → Single → Grid → EvenH → EvenV → MainH (Main* put the selected agent in the main slot).
   Only the agents in the current tab are shown, numbered and navigated.
+  Clicking a preview selects it in place without rearranging; selecting from the list (keys, a card, a title row, a tab switch) brings that agent to the main pane.
 - Each preview terminal has a 30px title row above it, in the look of herdr-app's own pane header: the program's icon,
   `N.project/branch` (the card's label; cyan for a worktree agent, dimmed for an exited shell), the terminal title (dimmed),
   and the status on the right (a spinner while working, a "Needs you" badge while blocked, a dot when done, nothing when idle).

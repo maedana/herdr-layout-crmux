@@ -155,6 +155,14 @@ export default class CrmuxList extends View {
     return pickSelected(addresses, shared("crmux.selected"), focused()?.agent);
   }
 
+  // The agent shown large in MainV / MainH. Kept apart from the selection: a pick from the list moves both (focusAgent), but
+  // clicking a preview only selects it in place (syncFocus), so the terminal clicked does not jump into the main slot.
+  // Falls back to the selection when unset or no longer in the list
+  main(addresses = this.addresses()) {
+    const main = shared("crmux.main");
+    return addresses.includes(main) ? main : this.selected(addresses);
+  }
+
   // --- Actions ---
 
   command(c) {
@@ -210,15 +218,28 @@ export default class CrmuxList extends View {
   select(address) {
     const list = this.addresses();
     const cur = this.selected(list);
-    if (!address || address === cur || !list.includes(address)) return;
+    if (!address || !list.includes(address)) return;
+    // Already selected (e.g. a preview was clicked in place): picking it from the list still brings it to the main slot
+    if (address === cur) {
+      if (this.main(list) !== address) this.promote(address);
+      return;
+    }
     // Selecting another one (e.g. by clicking a card) leaves Scroll mode (crmux resets the scroll on selection)
     if (this.scrolling()) this.scrollPreview(cur, "bottom");
     setShared("crmux.prev", cur);
     this.focusAgent(address);
   }
 
+  // Bring the (already selected) agent into the main slot
+  promote(address) {
+    setShared("crmux.main", address);
+    this.keepFocus(() => this.applyLayout());
+  }
+
   focusAgent(address) {
     setShared("crmux.selected", address);
+    // A selection from the list (j/k, numbers, t, card / title-row pick, refilter) makes it the main too
+    setShared("crmux.main", address);
     // agent.focus switches the contents of the Single agent block (also keeps herdr's focused agent in sync for multi-pane display).
     // An exited shell is not an agent: the Single preview shows its terminal block instead (previewTree)
     const exited = this.isExited(address);
@@ -256,7 +277,7 @@ export default class CrmuxList extends View {
   selectTab(tab, sel) {
     if (!tab) return;
     setShared("crmux.tab", { kind: tab.kind, value: tab.value ?? null });
-    this.refilter(sel);
+    this.refilter(sel, true);
   }
 
   // A click on the tab bar (crmux-list.tab-<n>): a list action, like a card click, so it leaves Insert first (which reclaims
@@ -267,9 +288,11 @@ export default class CrmuxList extends View {
     this.selectTab(tab, sel);
   }
 
-  // After the filter changes: keep the selected agent if it remains, otherwise the first (crmux switch_tab)
-  refilter(before) {
+  // After the filter changes: keep the selected agent if it remains, otherwise the first (crmux switch_tab).
+  // promote: a tab switch also brings the selected agent to the main slot (a mark toggle leaves the arrangement alone)
+  refilter(before, promote = false) {
     const next = keepSelection(this.addresses(), before);
+    if (next && promote) setShared("crmux.main", next);
     if (next && next !== before) this.focusAgent(next);
     else this.keepFocus(() => this.applyLayout());
   }
@@ -288,7 +311,7 @@ export default class CrmuxList extends View {
     if (shared("layout") !== LAYOUT) return false;
     const list = items.map((a) => a.address);
     const exited = items.filter((a) => a.status === "exited").map((a) => a.address);
-    const want = previewTree(this.arrange(), list, this.selected(list), exited, this.insert);
+    const want = previewTree(this.arrange(), list, this.selected(list), exited, this.insert, this.main(list));
     if (sameTree(want, findNode(layout(), "preview"))) return false;
     run("layout.set", { layout: crmuxLayout(want) });
     return true;
@@ -333,6 +356,9 @@ export default class CrmuxList extends View {
     if (action.type === "leave") return this.leaveInsert();
     if (action.address !== cur) {
       setShared("crmux.prev", cur);
+      // A clicked preview is selected in place: pin the main slot first (it may still be unset and follow the selection)
+      const main = this.main(addresses);
+      if (main) setShared("crmux.main", main);
       setShared("crmux.selected", action.address);
     }
     // A preview holds it while the list thinks it is Normal (the user clicked it): Insert on that preview.
@@ -343,7 +369,7 @@ export default class CrmuxList extends View {
       setShared("crmux.mode", "insert");
     }
     // Entering Insert, or (in Insert) another preview was clicked and is now the one being typed into: the accent frame moves
-    // there (and a new selection may change the main slot). The keyboard is already there, but layout.set may move it, and
+    // there (the main slot stays as it is). The keyboard is already there, but layout.set may move it, and
     // the reclaim (pane.focus on the new selection) keeps syncFocus from reading that move as a click
     this.keepFocus(() => this.applyLayout());
     return true;

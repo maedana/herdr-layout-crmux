@@ -177,6 +177,43 @@ test("Main variants: if the selection is not in the list, the first becomes the 
   assert.deepEqual(tree.children[1].children.map((c) => body(c).content.terminal), ["t2"]);
 });
 
+// The main slot and the selection are separate: clicking a preview selects it in place (the main stays), while a pick
+// from the list moves both. Borders follow the selection, the large pane follows main
+test("MainV: with main != selected, main stays large and the selected cell gets the light border (accent in Insert)", () => {
+  assert.deepEqual(previewTree("MainV", ["t1", "t2", "t3"], "t2", [], false, "t1"), {
+    id: "preview", type: "row", gap: 4,
+    children: [
+      cell("t1", "border", { size: { weight: 7 } }),
+      { id: "pv-rest", type: "column", gap: 4, size: { weight: 3 }, children: [cell("t2", "foreground"), cell("t3", "border")] },
+    ],
+  });
+  assert.deepEqual(previewTree("MainV", ["t1", "t2", "t3"], "t2", [], true, "t1").children[1].children[0], cell("t2", "accent"));
+});
+
+test("MainH: with main != selected, main stays the top pane and the selected one keeps its place below", () => {
+  assert.deepEqual(previewTree("MainH", ["t1", "t2", "t3"], "t3", [], false, "t2"), {
+    id: "preview", type: "column", gap: 4,
+    children: [
+      cell("t2", "border", { size: { weight: 6 } }),
+      { id: "pv-rest", type: "row", gap: 4, size: { weight: 4 }, children: [cell("t1", "border"), cell("t3", "foreground")] },
+    ],
+  });
+});
+
+test("Main variants: main defaults to selected, and falls back to selected (then the first) when it is not in the list", () => {
+  const mainOf = (tree) => body(tree.children[0]).content.terminal;
+  assert.equal(mainOf(previewTree("MainV", ["t1", "t2"], "t2")), "t2");
+  assert.equal(mainOf(previewTree("MainV", ["t1", "t2"], "t2", [], false, undefined)), "t2");
+  assert.equal(mainOf(previewTree("MainV", ["t1", "t2"], "t2", [], false, "t9")), "t2");
+  assert.equal(mainOf(previewTree("MainV", ["t1", "t2"], "t9", [], false, "t8")), "t1");
+});
+
+test("main does not affect the other arrangements", () => {
+  for (const arrange of ["Single", "Grid", "EvenH", "EvenV"]) {
+    assert.deepEqual(previewTree(arrange, ["t1", "t2", "t3"], "t2", [], false, "t1"), previewTree(arrange, ["t1", "t2", "t3"], "t2"), arrange);
+  }
+});
+
 const gridShape = (tree) => tree.children.map((row) => row.children.map((c) => body(c).content.terminal));
 
 test("Grid: columns are ceil(sqrt(n)), rows fill from the top, the remainder goes in the last row", () => {
