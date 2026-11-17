@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatElapsed, statusKind, shouldPulse, trackStatuses, projectName, parseRepo, sortByProject, cardLabel, previewLabels, statusIcon, cycle, pickSelected, exitedTerminals, neighbour } from "../mods/crmux-list/cards.js";
+import { formatElapsed, statusKind, shouldPulse, trackStatuses, projectName, parseRepo, sortByProject, cardLabel, previewLabels, statusIcon, cycle, pickSelected, nextSelection, exitedTerminals, neighbour } from "../mods/crmux-list/cards.js";
 
 test("under 60 seconds is shown as seconds, right-aligned to 2 digits", () => {
   assert.equal(formatElapsed(5), " 5s");
@@ -271,4 +271,53 @@ test("leaving exited starts hasWorked over, so an agent relaunched in that shell
   assert.deepEqual(trackStatuses(prev, [{ address: "t1", status: "idle", seenAt: 0 }], 9000), {
     t1: { kind: "idle", since: 9000, hasWorked: false },
   });
+});
+
+// nextSelection: what a selection writes. current is what shared holds (crmux.selected / main / prev) plus herdr's focused
+// agent (which resolves an unset selection, like pickSelected). It returns the new { selected, main, prev } (equal to
+// current where nothing changes) and whether the selection or the main shown changed
+const LIST = ["t1", "t2", "t3"];
+
+test("a pick from the list: the address becomes selected and main, the old selection becomes prev (where t goes back to)", () => {
+  assert.deepEqual(nextSelection({ selected: "t1", main: "t1", prev: "t3" }, LIST, { address: "t2", promote: true }), {
+    selected: "t2", main: "t2", prev: "t1", changed: true,
+  });
+});
+
+test("a pick from the list of the one already selected (clicked in place earlier) only moves it into the main slot", () => {
+  assert.deepEqual(nextSelection({ selected: "t2", main: "t1", prev: "t3" }, LIST, { address: "t2", promote: true }), {
+    selected: "t2", main: "t2", prev: "t3", changed: true,
+  });
+});
+
+test("a preview clicked in place: selected moves, main stays where it is", () => {
+  assert.deepEqual(nextSelection({ selected: "t1", main: "t3", prev: null }, LIST, { address: "t2" }), {
+    selected: "t2", main: "t3", prev: "t1", changed: true,
+  });
+});
+
+test("a preview clicked in place with main unset (or gone): main is pinned to the old selection so it does not follow", () => {
+  assert.deepEqual(nextSelection({ selected: "t1", main: undefined, prev: undefined }, LIST, { address: "t2" }), {
+    selected: "t2", main: "t1", prev: "t1", changed: true,
+  });
+  assert.deepEqual(nextSelection({ selected: "t1", main: "t9", prev: undefined }, LIST, { address: "t2" }).main, "t1");
+});
+
+test("remember: false (the old selection is going away) keeps prev as it was", () => {
+  assert.deepEqual(nextSelection({ selected: "t1", main: "t1", prev: "t3" }, LIST, { address: "t2", promote: true, remember: false }), {
+    selected: "t2", main: "t2", prev: "t3", changed: true,
+  });
+});
+
+test("selecting what is already selected and shown as main changes nothing", () => {
+  const current = { selected: "t2", main: "t2", prev: "t1" };
+  assert.deepEqual(nextSelection(current, LIST, { address: "t2", promote: true }), { ...current, changed: false });
+  assert.deepEqual(nextSelection(current, LIST, { address: "t2" }), { ...current, changed: false });
+});
+
+test("an unset selection resolves to herdr's focused agent: selecting it stores it, but nothing shown changes and prev stays", () => {
+  assert.deepEqual(
+    nextSelection({ selected: undefined, main: undefined, prev: undefined, focusedAgent: "t2" }, LIST, { address: "t2" }),
+    { selected: "t2", main: undefined, prev: undefined, changed: false },
+  );
 });

@@ -100,7 +100,7 @@ export function cardLabel({ selected, index, project, branch, worktree }) {
 }
 
 // Fixed part of each preview's title row, published as crmux.titles for crmux-title: { [address]: { label, worktree } }.
-// label is the card label without the selection mark (crmux-title adds it from crmux.selected). items is the current tab's list
+// label is the card label without the selection mark (a preview shows the selection by its frame). items is the current tab's list
 export function previewLabels(items) {
   return Object.fromEntries(items.map((a, index) => [a.address, {
     label: cardLabel({ selected: false, index, project: a.project, branch: a.branch, worktree: a.worktree }),
@@ -133,4 +133,23 @@ export function pickSelected(addresses, remembered, focusedAgent) {
   if (addresses.includes(remembered)) return remembered;
   if (addresses.includes(focusedAgent)) return focusedAgent;
   return addresses[0] ?? null;
+}
+
+// What a selection writes. current: { selected, main, prev } as kept in shared (crmux.selected / crmux.main / crmux.prev,
+// where t goes back to) and focusedAgent (herdr's, which resolves an unset selection). list: the current tab's addresses.
+// promote: address becomes the main too (a pick from the list); otherwise the main slot stays as it is (a preview
+// clicked in place): when the selection moves it is pinned to the main shown, in case it is unset or gone and would
+// follow. remember: false when the old selection is going away (closed, or filtered out), so t keeps its earlier target.
+// Returns the new { selected, main, prev } (each the same as current where it does not change) and whether the
+// selection or the main shown changed
+export function nextSelection({ selected, main, prev, focusedAgent }, list, { address, promote = false, remember = true }) {
+  const cur = pickSelected(list, selected, focusedAgent);
+  const shown = list.includes(main) ? main : cur;
+  const pinned = promote ? address : address !== cur ? shown : null;
+  return {
+    selected: address,
+    main: pinned ?? main,
+    prev: address !== selected && remember && address !== cur ? cur : prev,
+    changed: address !== cur || (pinned !== null && pinned !== shown),
+  };
 }

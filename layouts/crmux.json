@@ -40,7 +40,7 @@
               "id": "preview-title",
               "type": "block",
               "size": { "px": 30 },
-              "content": { "mod": "crmux-title" }
+              "content": { "mod": "crmux-title", "props": { "radius": 5 } }
             },
             {
               "id": "preview-body",

@@ -26,23 +26,25 @@ const titled = (id, titleProps, content, extra) => ({
     { id: `${id}-body`, type: "block", radius: 5, content },
   ],
 });
-// Single's title row gets no address and follows crmux.selected, so moving the selection does not change the tree
-const FOCUSED = titled("preview", {}, { agent: "focused" }, { border: frame("border") });
+// Single's title row gets no address (only the corner radius) and follows the list's shown selection, so moving the
+// selection does not change the tree
+const SINGLE_TITLE = { props: { radius: 5 } };
+const FOCUSED = titled("preview", SINGLE_TITLE, { agent: "focused" }, { border: frame("border") });
 
 test("Single is one agent block (selection is switched with agent.focus)", () => {
   assert.deepEqual(previewTree("Single", ["t1", "t2"], "t1"), FOCUSED);
 });
 
 // A shell is not an agent (agent.focus cannot show it), so an exited selection is shown as its terminal
-const EXITED = (address) => titled("preview", {}, { terminal: address }, { border: frame("border") });
+const EXITED = (address) => titled("preview", SINGLE_TITLE, { terminal: address }, { border: frame("border") });
 
 test("Single with an exited selection shows that terminal instead of the focused agent", () => {
-  assert.deepEqual(previewTree("Single", ["t1", "t2"], "t2", ["t2"]), EXITED("t2"));
-  assert.deepEqual(previewTree("Single", ["t1", "t2"], "t1", ["t2"]), FOCUSED);
+  assert.deepEqual(previewTree("Single", ["t1", "t2"], "t2", { exited: ["t2"] }), EXITED("t2"));
+  assert.deepEqual(previewTree("Single", ["t1", "t2"], "t1", { exited: ["t2"] }), FOCUSED);
 });
 
 test("with one item or fewer, an exited selection is also shown as its terminal", () => {
-  assert.deepEqual(previewTree("MainV", ["t1"], "t1", ["t1"]), EXITED("t1"));
+  assert.deepEqual(previewTree("MainV", ["t1"], "t1", { exited: ["t1"] }), EXITED("t1"));
 });
 
 test("with one agent or fewer, every arrangement is the same as Single", () => {
@@ -52,7 +54,7 @@ test("with one agent or fewer, every arrangement is the same as Single", () => {
 
 // Previews for multi-pane display: the selected one has a light frame in Normal (accent in Insert), the others gray.
 // The title row is given the address it shows
-const cell = (address, color, extra = {}) => titled(`pv-${address}`, { props: { address } }, { terminal: address }, {
+const cell = (address, color, extra = {}) => titled(`pv-${address}`, { props: { address, radius: 5 } }, { terminal: address }, {
   ...extra,
   border: frame(color),
 });
@@ -76,7 +78,7 @@ test("block ids replace non-alphanumerics (such as the / in another machine's ma
   const tree = previewTree("EvenH", ["vps/t7", "t1"], "t1");
   assert.equal(tree.children[0].id, "pv-vps_t7");
   assert.equal(tree.children[0].children[0].id, "pv-vps_t7-title");
-  assert.deepEqual(tree.children[0].children[0].content.props, { address: "vps/t7" });
+  assert.deepEqual(tree.children[0].children[0].content.props, { address: "vps/t7", radius: 5 });
   assert.deepEqual(body(tree.children[0]), { id: "pv-vps_t7-body", type: "block", radius: 5, content: { terminal: "vps/t7" } });
 });
 
@@ -87,7 +89,7 @@ test("the title row is a fixed 30px strip (the height of herdr's pane header) ab
   assert.deepEqual(main.border, { width: 1, color: "foreground" });
   const [title, term] = main.children;
   assert.deepEqual(title, {
-    id: "pv-t1-title", type: "block", size: { px: 30 }, content: { mod: "crmux-title", props: { address: "t1" } },
+    id: "pv-t1-title", type: "block", size: { px: 30 }, content: { mod: "crmux-title", props: { address: "t1", radius: 5 } },
   });
   assert.equal("border" in term, false);
   assert.equal("focus" in term, false);
@@ -103,13 +105,18 @@ test("frames are rounded like herdr's panes; the terminal block's corners stay i
   assert.equal(previewTree("Single", ["t1"], "t1").radius, 6);
 });
 
+test("the title row is told the same inner radius (6 minus the 1px border) to round its top corners with", () => {
+  assert.equal(previewTree("MainV", ["t1", "t2"], "t1").children[0].children[0].content.props.radius, 5);
+  assert.equal(previewTree("Single", ["t1"], "t1").children[0].content.props.radius, 5);
+});
+
 // Every frame on the right side (any node with a border), for checking all arrangements at once
 const frames = (node) => [...(node.border ? [node] : []), ...(node.children ?? []).flatMap(frames)];
 
 test("no preview uses the layout's `focus` (it does not light up for a terminal inside the column); the mode drives the color", () => {
   for (const arrange of ["MainV", "Single", "Grid", "EvenH", "EvenV", "MainH"]) {
     for (const insert of [false, true]) {
-      const all = frames(previewTree(arrange, ["t1", "t2", "t3"], "t2", [], insert));
+      const all = frames(previewTree(arrange, ["t1", "t2", "t3"], "t2", { insert }));
       assert.ok(all.length > 0);
       for (const f of all) assert.equal("focus" in f, false, `${arrange} insert=${insert}`);
     }
@@ -117,11 +124,11 @@ test("no preview uses the layout's `focus` (it does not light up for a terminal 
 });
 
 test("Insert: the selected preview's frame is accent (the one being typed into), the others stay gray", () => {
-  assert.deepEqual(previewTree("EvenH", ["t1", "t2", "t3"], "t2", [], true), {
+  assert.deepEqual(previewTree("EvenH", ["t1", "t2", "t3"], "t2", { insert: true }), {
     id: "preview", type: "row", gap: 4,
     children: [cell("t1", "border"), cell("t2", "accent"), cell("t3", "border")],
   });
-  assert.deepEqual(previewTree("MainV", ["t1", "t2", "t3"], "t2", [], true), {
+  assert.deepEqual(previewTree("MainV", ["t1", "t2", "t3"], "t2", { insert: true }), {
     id: "preview", type: "row", gap: 4,
     children: [
       cell("t2", "accent", { size: { weight: 7 } }),
@@ -131,20 +138,25 @@ test("Insert: the selected preview's frame is accent (the one being typed into),
 });
 
 test("Single: an accent frame in Insert, gray in Normal (also for an exited shell's terminal)", () => {
-  assert.deepEqual(previewTree("Single", ["t1", "t2"], "t1", [], true), titled("preview", {}, { agent: "focused" }, { border: frame("accent") }));
-  assert.deepEqual(previewTree("Single", ["t1", "t2"], "t1", [], false), FOCUSED);
-  assert.deepEqual(previewTree("Single", ["t1", "t2"], "t2", ["t2"], true), titled("preview", {}, { terminal: "t2" }, { border: frame("accent") }));
-  assert.deepEqual(previewTree("MainV", ["t1"], "t1", [], true).border, frame("accent"));
+  assert.deepEqual(previewTree("Single", ["t1", "t2"], "t1", { insert: true }), titled("preview", SINGLE_TITLE, { agent: "focused" }, { border: frame("accent") }));
+  assert.deepEqual(previewTree("Single", ["t1", "t2"], "t1", { insert: false }), FOCUSED);
+  assert.deepEqual(previewTree("Single", ["t1", "t2"], "t2", { exited: ["t2"], insert: true }), titled("preview", SINGLE_TITLE, { terminal: "t2" }, { border: frame("accent") }));
+  assert.deepEqual(previewTree("MainV", ["t1"], "t1", { insert: true }).border, frame("accent"));
 });
 
 test("switching Normal / Insert only recolors frames: every frame stays 1px, so nothing resizes", () => {
   for (const arrange of ["MainV", "Single", "Grid", "EvenH", "EvenV", "MainH"]) {
-    const normal = previewTree(arrange, ["t1", "t2", "t3"], "t2", [], false);
-    const insert = previewTree(arrange, ["t1", "t2", "t3"], "t2", [], true);
+    const normal = previewTree(arrange, ["t1", "t2", "t3"], "t2", { insert: false });
+    const insert = previewTree(arrange, ["t1", "t2", "t3"], "t2", { insert: true });
     for (const f of [...frames(normal), ...frames(insert)]) assert.equal(f.border.width, 1);
     const strip = (n) => JSON.parse(JSON.stringify(n, (k, v) => (k === "color" ? undefined : v)));
     assert.deepEqual(strip(insert), strip(normal), arrange);
   }
+});
+
+test("an unknown arrangement is drawn as Single (exited selection included)", () => {
+  assert.deepEqual(previewTree("Nope", ["t1", "t2"], "t1"), FOCUSED);
+  assert.deepEqual(previewTree("Nope", ["t1", "t2"], "t2", { exited: ["t2"] }), EXITED("t2"));
 });
 
 test("Single: moving the selection keeps the same tree (the title row follows crmux.selected)", () => {
@@ -180,18 +192,18 @@ test("Main variants: if the selection is not in the list, the first becomes the 
 // The main slot and the selection are separate: clicking a preview selects it in place (the main stays), while a pick
 // from the list moves both. Borders follow the selection, the large pane follows main
 test("MainV: with main != selected, main stays large and the selected cell gets the light border (accent in Insert)", () => {
-  assert.deepEqual(previewTree("MainV", ["t1", "t2", "t3"], "t2", [], false, "t1"), {
+  assert.deepEqual(previewTree("MainV", ["t1", "t2", "t3"], "t2", { main: "t1" }), {
     id: "preview", type: "row", gap: 4,
     children: [
       cell("t1", "border", { size: { weight: 7 } }),
       { id: "pv-rest", type: "column", gap: 4, size: { weight: 3 }, children: [cell("t2", "foreground"), cell("t3", "border")] },
     ],
   });
-  assert.deepEqual(previewTree("MainV", ["t1", "t2", "t3"], "t2", [], true, "t1").children[1].children[0], cell("t2", "accent"));
+  assert.deepEqual(previewTree("MainV", ["t1", "t2", "t3"], "t2", { insert: true, main: "t1" }).children[1].children[0], cell("t2", "accent"));
 });
 
 test("MainH: with main != selected, main stays the top pane and the selected one keeps its place below", () => {
-  assert.deepEqual(previewTree("MainH", ["t1", "t2", "t3"], "t3", [], false, "t2"), {
+  assert.deepEqual(previewTree("MainH", ["t1", "t2", "t3"], "t3", { main: "t2" }), {
     id: "preview", type: "column", gap: 4,
     children: [
       cell("t2", "border", { size: { weight: 6 } }),
@@ -200,17 +212,19 @@ test("MainH: with main != selected, main stays the top pane and the selected one
   });
 });
 
-test("Main variants: main defaults to selected, and falls back to selected (then the first) when it is not in the list", () => {
+// The list normalizes main before it gets here (an unset or gone main follows the selection), so the tree only falls
+// back to the first for a main it does not list
+test("Main variants: main defaults to selected, and the first becomes the main when main is not in the list", () => {
   const mainOf = (tree) => body(tree.children[0]).content.terminal;
   assert.equal(mainOf(previewTree("MainV", ["t1", "t2"], "t2")), "t2");
-  assert.equal(mainOf(previewTree("MainV", ["t1", "t2"], "t2", [], false, undefined)), "t2");
-  assert.equal(mainOf(previewTree("MainV", ["t1", "t2"], "t2", [], false, "t9")), "t2");
-  assert.equal(mainOf(previewTree("MainV", ["t1", "t2"], "t9", [], false, "t8")), "t1");
+  assert.equal(mainOf(previewTree("MainV", ["t1", "t2"], "t2", { main: undefined })), "t2");
+  assert.equal(mainOf(previewTree("MainV", ["t1", "t2"], "t2", { main: "t9" })), "t1");
+  assert.equal(mainOf(previewTree("MainV", ["t1", "t2"], "t9", { main: "t8" })), "t1");
 });
 
 test("main does not affect the other arrangements", () => {
   for (const arrange of ["Single", "Grid", "EvenH", "EvenV"]) {
-    assert.deepEqual(previewTree(arrange, ["t1", "t2", "t3"], "t2", [], false, "t1"), previewTree(arrange, ["t1", "t2", "t3"], "t2"), arrange);
+    assert.deepEqual(previewTree(arrange, ["t1", "t2", "t3"], "t2", { main: "t1" }), previewTree(arrange, ["t1", "t2", "t3"], "t2"), arrange);
   }
 });
 

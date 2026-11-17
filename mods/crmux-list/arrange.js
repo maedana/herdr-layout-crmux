@@ -7,60 +7,61 @@ export function nextArrange(arrange) {
   return ARRANGES[(ARRANGES.indexOf(arrange) + 1) % ARRANGES.length];
 }
 
-// Tree for the right side (id "preview"). addresses is in list order, selected is the selected address
 const GAP = 4;
-
-// Borders show where the keyboard is. Every preview is one rounded 1px frame around its title row and terminal (like
-// herdr-app's own pane; 1px always, so nothing resizes). The layout's `focus` does not light up for a terminal block inside
-// the column, so the color follows the list's mode instead: accent on the preview being typed into in Insert, a light frame
-// on the selected one in a multi-pane display otherwise (so you can see which one i enters), gray for the rest
-const frame = (color) => ({ width: 1, color });
-// Corner radius of the frame (herdr's pane radius). The terminal block inside is rounded by 1px less (the frame's border
-// width) so its corners stay inside the frame's arc
+// Corner radius of a preview's frame (herdr's pane radius). The terminal block and the title row's top corners inside are
+// rounded by 1px less (the frame's border width) so their corners stay inside the frame's arc
 const RADIUS = 6;
+const RADIUS_INNER = RADIUS - 1;
 // Height of the title row above each preview terminal (the same as herdr-app's own pane header)
 const TITLE_PX = 30;
 
 // A preview: a column of the title row (crmux-title mod, icon, N.project/branch, terminal title and status like the pane header)
 // and the terminal block. The size and the frame go on the column, so the frame surrounds the title row too. The column
 // paints the background inside its rounded frame; the title row has no square background of its own (the mod rounds its
-// top corners). titleProps is what the title row is given ({} follows crmux.selected)
-function titled(id, titleProps, content, color, extra = {}) {
+// top corners by the radius it is given, the same as the terminal block's). address is what the title row shows (null:
+// Single's, which follows the list's shown selection; it is left out so the tree does not change with the selection).
+// Borders show where the keyboard is. The frame is one rounded 1px border (like herdr-app's own pane; 1px always, so nothing
+// resizes). The layout's `focus` does not light up for a terminal block inside the column, so the color follows the list's
+// mode instead: accent on the preview being typed into in Insert, a light frame on the selected one in a multi-pane display
+// otherwise (so you can see which one i enters), gray for the rest
+function titled(id, address, content, color, extra = {}) {
+  const props = address === null ? { radius: RADIUS_INNER } : { address, radius: RADIUS_INNER };
   return {
-    id, type: "column", ...extra, border: frame(color), radius: RADIUS, background: "background",
+    id, type: "column", ...extra, border: { width: 1, color }, radius: RADIUS, background: "background",
     children: [
-      { id: `${id}-title`, type: "block", size: { px: TITLE_PX }, content: { mod: "crmux-title", ...titleProps } },
-      { id: `${id}-body`, type: "block", radius: RADIUS - 1, content },
+      { id: `${id}-title`, type: "block", size: { px: TITLE_PX }, content: { mod: "crmux-title", props } },
+      { id: `${id}-body`, type: "block", radius: RADIUS_INNER, content },
     ],
   };
 }
-
-// Single's title row is given no address: it follows crmux.selected, so a j/k (agent.focus) does not need a layout.set
-const single = (insert, content = { agent: "focused" }) => titled("preview", {}, content, insert ? "accent" : "border");
 
 // Preview for one agent. The selected one is accent in Insert, light otherwise
 function cell(address, selected, insert, extra = {}) {
   const id = `pv-${address.replace(/[^A-Za-z0-9_-]/g, "_")}`;
   const color = address !== selected ? "border" : insert ? "accent" : "foreground";
-  return titled(id, { props: { address } }, { terminal: address }, color, extra);
+  return titled(id, address, { terminal: address }, color, extra);
 }
 
 const split = (type, children, extra = {}) => ({ type, gap: GAP, ...extra, children });
 
+// Tree for the right side (id "preview"). addresses is in list order, selected is the selected address.
 // exited: addresses of exited shells (not agents, so agent.focus cannot put them in the Single agent block; show the terminal itself).
 // insert: the list is in Insert (the selected preview is being typed into, so its frame is accent)
-// main: the address shown large in MainV / MainH (defaults to selected). Separate from selected so that clicking a
-// preview can select it in place without moving it into the main slot; borders always follow selected
-export function previewTree(arrange, addresses, selected, exited = [], insert = false, main = selected) {
-  if (arrange === "Single" || addresses.length <= 1) {
-    return exited.includes(selected) ? single(insert, { terminal: selected }) : single(insert);
+// main: the address shown large in MainV / MainH (defaults to selected; the list resolves an unset or gone one). Separate
+// from selected so that clicking a preview can select it in place without moving it into the main slot; borders always
+// follow selected
+export function previewTree(arrange, addresses, selected, { exited = [], insert = false, main = selected } = {}) {
+  if (addresses.length > 1) {
+    const cells = addresses.map((a) => cell(a, selected, insert));
+    if (arrange === "EvenH") return split("row", cells, { id: "preview" });
+    if (arrange === "EvenV") return split("column", cells, { id: "preview" });
+    if (arrange === "MainV" || arrange === "MainH") return mainTree(arrange, addresses, selected, insert, main);
+    if (arrange === "Grid") return gridTree(cells);
   }
-  const cells = addresses.map((a) => cell(a, selected, insert));
-  if (arrange === "EvenH") return split("row", cells, { id: "preview" });
-  if (arrange === "EvenV") return split("column", cells, { id: "preview" });
-  if (arrange === "MainV" || arrange === "MainH") return mainTree(arrange, addresses, selected, insert, main);
-  if (arrange === "Grid") return gridTree(cells);
-  return single(insert);
+  // Single (also with one agent or fewer): the agent block herdr focuses, or an exited selection's terminal. Its title row
+  // is given no address: it follows the list's shown selection (crmux.shown), so a j/k (agent.focus) does not need a layout.set
+  const content = exited.includes(selected) ? { terminal: selected } : { agent: "focused" };
+  return titled("preview", null, content, insert ? "accent" : "border");
 }
 
 // MainV / MainH: the main agent (normally the selected one; crmux moves the selected one to the front) as the main pane. The main ratio is
@@ -72,8 +73,8 @@ const MAIN = {
 
 function mainTree(arrange, addresses, selected, insert, wanted) {
   const m = MAIN[arrange];
-  // main if listed, else the selection, else the first
-  const main = [wanted, selected].find((a) => addresses.includes(a)) ?? addresses[0];
+  // wanted if listed, else the first
+  const main = addresses.includes(wanted) ? wanted : addresses[0];
   const rest = addresses.filter((a) => a !== main).map((a) => cell(a, selected, insert));
   return split(m.type, [
     cell(main, selected, insert, { size: { weight: m.main } }),
