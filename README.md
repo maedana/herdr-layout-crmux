@@ -27,6 +27,10 @@ and a vim-like Normal / Insert mode.
   unstaged together), or `no changes`. Nothing is shown outside a git repository.
 - Card colors follow the theme (`working` / `blocked` / `idle`). Waiting cards pulse; a card that
   was working pulses for 5–15 seconds after it stops.
+- When an agent exits, its terminal is left as a plain shell and is no longer an agent. Such shells (a live
+  terminal shown in a pane with no status and a `turn` of 1 or more; a shell that never ran an agent has `turn` 0)
+  stay in the list as dimmed cards (`muted`) with `⏹` and the time since the agent exited. Selecting one shows the
+  shell in the preview; `x` closes its terminal (and its pane, or its tab if it was the last pane).
 - The right side shows real terminals. `v` cycles the arrangement:
   MainV → Single → Grid → EvenH → EvenV → MainH (Main* put the selected agent in the main slot).
   Only the agents in the current tab are shown, numbered and navigated.
@@ -42,6 +46,7 @@ Normal (the list has the keyboard):
 | `t` | toggle with the previous selection |
 | `h` / `←`, `l` / `→` | previous / next tab (wraps); the selection stays if the agent is in the new tab, else the first one |
 | `Space` | mark / unmark the selected agent (unmarking the last one on the `Marked` tab goes back to `All`) |
+| `x` | close the selected exited shell's terminal (no confirmation) and select the next card; does nothing on a live agent |
 | `i` | Insert: move the keyboard to the selected agent's terminal |
 | `v` | next arrangement |
 | `ctrl-u` / `g g` | scroll the preview half a page up / to the top and enter Scroll |
@@ -66,7 +71,7 @@ Plain `Esc` therefore no longer reaches the program in this layout; press `Esc` 
 
 The same actions can be run from a shell while the layout is shown, e.g.
 `herdr-app do crmux-list.arrange`, `crmux-list.down`, `crmux-list.select-2`, `crmux-list.normal`,
-`crmux-list.mark`, `crmux-list.tab-next`, `crmux-list.tab-prev`, `crmux-list.scroll-up`, `crmux-list.line-down`.
+`crmux-list.mark`, `crmux-list.tab-next`, `crmux-list.tab-prev`, `crmux-list.scroll-up`, `crmux-list.line-down`, `crmux-list.close`.
 
 ## Install
 

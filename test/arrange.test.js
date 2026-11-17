@@ -18,6 +18,18 @@ test("Single is one agent block (selection is switched with agent.focus)", () =>
   assert.deepEqual(previewTree("Single", ["t1", "t2"], "t1"), FOCUSED);
 });
 
+// A shell is not an agent (agent.focus cannot show it), so an exited selection is shown as its terminal
+const EXITED = (address) => ({ id: "preview", type: "block", content: { terminal: address } });
+
+test("Single with an exited selection shows that terminal instead of the focused agent", () => {
+  assert.deepEqual(previewTree("Single", ["t1", "t2"], "t2", ["t2"]), EXITED("t2"));
+  assert.deepEqual(previewTree("Single", ["t1", "t2"], "t1", ["t2"]), FOCUSED);
+});
+
+test("with one item or fewer, an exited selection is also shown as its terminal", () => {
+  assert.deepEqual(previewTree("MainV", ["t1"], "t1", ["t1"]), EXITED("t1"));
+});
+
 test("with one agent or fewer, every arrangement is the same as Single", () => {
   assert.deepEqual(previewTree("MainV", ["t1"], "t1"), FOCUSED);
   assert.deepEqual(previewTree("Grid", [], null), FOCUSED);

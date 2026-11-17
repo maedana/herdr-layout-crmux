@@ -10,7 +10,7 @@ export function nextArrange(arrange) {
 // Tree for the right side (id "preview"). addresses is in list order, selected is the selected address
 const GAP = 4;
 
-const single = () => ({ id: "preview", type: "block", content: { agent: "focused" } });
+const single = (content = { agent: "focused" }) => ({ id: "preview", type: "block", content });
 
 // Terminal block for one agent. The selected one gets an accent border
 function cell(address, selected, extra = {}) {
@@ -23,8 +23,11 @@ function cell(address, selected, extra = {}) {
 
 const split = (type, children, extra = {}) => ({ type, gap: GAP, ...extra, children });
 
-export function previewTree(arrange, addresses, selected) {
-  if (arrange === "Single" || addresses.length <= 1) return single();
+// exited: addresses of exited shells (not agents, so agent.focus cannot put them in the Single agent block; show the terminal itself)
+export function previewTree(arrange, addresses, selected, exited = []) {
+  if (arrange === "Single" || addresses.length <= 1) {
+    return exited.includes(selected) ? single({ terminal: selected }) : single();
+  }
   const cells = addresses.map((a) => cell(a, selected));
   if (arrange === "EvenH") return split("row", cells, { id: "preview" });
   if (arrange === "EvenV") return split("column", cells, { id: "preview" });

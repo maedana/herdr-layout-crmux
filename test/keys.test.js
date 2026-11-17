@@ -21,9 +21,14 @@ test("Normal: 1-9 select by number, gg goes to the top, G to the bottom", () => 
 });
 
 test("Normal: unknown keys and other shifted keys do nothing", () => {
-  assert.equal(normalKey("x", plain, false), null);
+  assert.equal(normalKey("z", plain, false), null);
   assert.equal(normalKey("j", shift, false), null);
   assert.equal(normalKey("x", ctrl, false), null);
+});
+
+test("Normal: x closes the selected one (main.js only closes exited ones)", () => {
+  assert.equal(normalKey("x", plain, false), "close");
+  assert.equal(normalKey("x", shift, false), null);
 });
 
 test("Scroll: j/k scroll the preview by one line instead of moving the selection (crmux handle_scroll_mode)", () => {
@@ -43,7 +48,7 @@ test("Scroll: C-u/C-d half page, gg top, G bottom, Esc back, i Insert", () => {
 });
 
 test("Scroll: selection, tab, mark and arrangement keys are ignored", () => {
-  for (const k of ["h", "l", "t", "v", "q", "space", "1"]) assert.equal(scrollKey(k, plain, false), null, k);
+  for (const k of ["h", "l", "t", "v", "q", "x", "space", "1"]) assert.equal(scrollKey(k, plain, false), null, k);
 });
 
 // Like crmux's preview_scroll, count how many lines the preview is scrolled up (0 = at the bottom)

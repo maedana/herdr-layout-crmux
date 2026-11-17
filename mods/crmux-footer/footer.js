@@ -12,6 +12,6 @@ export function footerParts(mode, nextArrange) {
   }
   return [
     { text: "crmux", app: true },
-    { text: ` | hjkl/1-9/t:Nav C-u:ScrollUp Space:Mark v:${nextArrange} i:Insert q:Main` },
+    { text: ` | hjkl/1-9/t:Nav C-u:ScrollUp Space:Mark x:Close(exited) v:${nextArrange} i:Insert q:Main` },
   ];
 }

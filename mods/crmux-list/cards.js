@@ -12,8 +12,21 @@ export function formatElapsed(secs) {
 
 // Map herdr status (working / blocked / done / idle) to crmux's 3 visual states.
 // done means "finished while nobody was looking" and becomes idle once seen. Both are crmux Idle.
+// exited (not a herdr status: the shell left behind after an agent ended, see exitedTerminals) stays its own state
 export function statusKind(status) {
-  return status === "working" || status === "blocked" ? status : "idle";
+  return status === "working" || status === "blocked" || status === "exited" ? status : "idle";
+}
+
+// Terminals that were agents and are now plain shells: no status, at least one turn (herdr-core keeps turn after
+// the agent exits; a shell that never ran an agent has turn 0), live, shown in a pane (parked ones have none), and with
+// the shell itself in front (not vim, a server, or an agent still starting up, which x must not kill).
+// Returns [{ address, pane }] in terminals() order, where pane is the panes() entry showing it
+export function exitedTerminals(terminals, panes) {
+  const byTerminal = new Map((panes ?? []).filter((p) => p.terminal).map((p) => [p.terminal, p]));
+  return (terminals ?? [])
+    .filter((t) => !t.status && (t.turn ?? 0) >= 1 && t.state === "live" && byTerminal.has(t.address))
+    .filter((t) => byTerminal.get(t.address).program?.shell !== false)
+    .map((t) => ({ address: t.address, pane: byTerminal.get(t.address) }));
 }
 
 // Like crmux (ui.rs should_pulse), the completion pulse runs only 5-15 seconds after a working period
@@ -41,7 +54,8 @@ export function trackStatuses(records, list, now) {
     }
     changed = true;
     next[address] = prev
-      ? { kind, since: now, hasWorked: prev.hasWorked || kind === "working" }
+      // Leaving exited means an agent was started again in that shell: its work starts over
+      ? { kind, since: now, hasWorked: (prev.kind !== "exited" && prev.hasWorked) || kind === "working" }
       : { kind, since: seenAt ?? now, hasWorked: kind === "working" };
   }
   return changed ? next : records;
@@ -85,7 +99,7 @@ export function cardLabel({ selected, index, project, branch, worktree }) {
   return `${selected ? "> " : ""}${number}${project}${suffix ? `/${suffix}` : ""}`;
 }
 
-const ICONS = { working: "⚡", blocked: "⚠", idle: "💤" };
+const ICONS = { working: "⚡", blocked: "⚠", idle: "💤", exited: "⏹" };
 
 // State icon at the right of the card's bottom edge (crmux ui.rs state_label)
 export function statusIcon(status) {
@@ -96,6 +110,13 @@ export function statusIcon(status) {
 export function cycle(i, delta, n) {
   if (n <= 0) return 0;
   return (((i + delta) % n) + n) % n;
+}
+
+// Selection after address leaves the list (e.g. closed with x): the next one, else the previous one, else null
+export function neighbour(addresses, address) {
+  const i = addresses.indexOf(address);
+  if (i < 0) return null;
+  return addresses[i + 1] ?? addresses[i - 1] ?? null;
 }
 
 // Selected address: remembered selection -> herdr's focused agent -> first

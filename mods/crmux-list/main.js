@@ -4,12 +4,12 @@
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex, ScrollHandle } from "gpui-base";
 import {
-  agents, panes, spaces, run, hc, exec, shared, setShared, theme, settings, layout, checking, nextCommand, setAgentOrder,
-  focused,
+  agents, terminals, panes, spaces, run, hc, exec, shared, setShared, theme, settings, layout, checking, nextCommand,
+  setAgentOrder, focused,
 } from "herdr";
 import {
   formatElapsed, shouldPulse, trackStatuses, statusKind, statusIcon, projectName, parseRepo, sortByProject, cardLabel, cycle,
-  pickSelected,
+  pickSelected, exitedTerminals, neighbour,
 } from "./cards.js";
 import { nextArrange, previewTree, crmuxLayout, findNode, sameTree } from "./arrange.js";
 import {
@@ -93,14 +93,16 @@ export default class CrmuxList extends View {
     return shared("crmux.repos") ?? {};
   }
 
-  // All agents (ascending by project name)
+  // All agents, plus the shells of agents that have exited (status "exited"), ascending by project name
+  // (within a project, live agents come before exited ones)
   items() {
-    const byPane = new Map(panes().map((p) => [p.pane, p]));
-    const bySpace = new Map(spaces().map((s) => [s.id, s]));
+    const allPanes = panes();
+    const allSpaces = spaces();
+    const byPane = new Map(allPanes.map((p) => [p.pane, p]));
+    const bySpace = new Map(allSpaces.map((s) => [s.id, s]));
+    const byTab = new Map(allSpaces.flatMap((s) => (s.tabs ?? []).map((t) => [t.id, s])));
     const repos = this.repos();
-    return sortByProject(agents().map((a) => {
-      const p = byPane.get(a.pane);
-      const s = bySpace.get(a.space);
+    const item = (a, p, s) => {
       const repo = p?.cwd ? repos[diffKey(s?.machine ?? null, p.cwd)] : null;
       return {
         address: a.address, pane: a.pane, tab: a.tab, status: a.status, title: a.title,
@@ -109,7 +111,20 @@ export default class CrmuxList extends View {
         space: a.space, spaceName: a.space_name, spaceIndex: s?.index ?? 0,
         cwd: p?.cwd ?? null, machine: s?.machine ?? null,
       };
-    }));
+    };
+    // An exited shell is not in agents(), so take what agents() would give from its pane and the space holding its tab
+    // (skipped while that space is not known, e.g. the tab is closing, so no nameless @space tab appears)
+    const exited = exitedTerminals(terminals(), allPanes).flatMap(({ address, pane: p }) => {
+      const s = byTab.get(p.tab);
+      if (!s) return [];
+      return [item({ address, pane: p.pane, tab: p.tab, status: "exited", title: p.title, space: s.id, space_name: s.name }, p, s)];
+    });
+    return sortByProject([...agents().map((a) => item(a, byPane.get(a.pane), bySpace.get(a.space))), ...exited]);
+  }
+
+  // Whether address is an exited shell (only what that needs, not the whole items() list)
+  isExited(address) {
+    return exitedTerminals(terminals(), panes()).some((e) => e.address === address);
   }
 
   marks() {
@@ -167,6 +182,7 @@ export default class CrmuxList extends View {
     else if (name === "mark") this.markSelected(sel);
     else if (name === "tab-next") this.switchTab(1, sel);
     else if (name === "tab-prev") this.switchTab(-1, sel);
+    else if (name === "close") this.closeExited(sel, list);
   }
 
   select(address) {
@@ -181,11 +197,23 @@ export default class CrmuxList extends View {
 
   focusAgent(address) {
     setShared("crmux.selected", address);
-    // agent.focus switches the contents of the Single agent block (also keeps herdr's focused agent in sync for multi-pane display)
+    // agent.focus switches the contents of the Single agent block (also keeps herdr's focused agent in sync for multi-pane display).
+    // An exited shell is not an agent: the Single preview shows its terminal block instead (previewTree)
+    const exited = this.isExited(address);
     this.keepFocus(() => {
-      run("agent.focus", { terminal: address });
+      if (!exited) run("agent.focus", { terminal: address });
       this.applyLayout();
     });
+  }
+
+  // x: close the selected exited shell's terminal (its pane, or its tab if it is the last pane, goes too) and select the
+  // next one in the list (else the previous one). A live agent is never closed, so a running agent cannot be killed by mistake
+  closeExited(sel, list) {
+    if (!sel || !this.isExited(sel)) return;
+    const next = neighbour(list, sel);
+    run("terminal.kill", { terminal: sel });
+    if (next) this.focusAgent(next);
+    else this.keepFocus(() => this.applyLayout());
   }
 
   // Space: toggle the mark on the selected one. An agent unmarked in the Marked tab disappears from the list
@@ -220,8 +248,10 @@ export default class CrmuxList extends View {
   // Build the right side from the arrangement, list, and selection, and swap it via layout.set if it differs from the current layout
   applyLayout() {
     if (shared("layout") !== LAYOUT) return;
-    const list = this.addresses();
-    const want = previewTree(this.arrange(), list, this.selected(list));
+    const items = this.view().items;
+    const list = items.map((a) => a.address);
+    const exited = items.filter((a) => a.status === "exited").map((a) => a.address);
+    const want = previewTree(this.arrange(), list, this.selected(list), exited);
     if (sameTree(want, findNode(layout(), "preview"))) return;
     run("layout.set", { layout: crmuxLayout(want) });
   }
@@ -397,12 +427,18 @@ export default class CrmuxList extends View {
     const parts = a.cwd ? this.diffs[diffKey(a.machine, a.cwd)] : null;
     return h_flex().flex_1().min_w(0).overflow_hidden().whitespace_nowrap()
       .children((parts ?? []).map((p) => div().flex_none().whitespace_nowrap()
-        .text_color(t[DIFF_COLORS[p.color]] ?? t.muted).child(p.text)));
+        // An exited card is dimmed, its diff summary included
+        .text_color(a.status === "exited" ? t.muted : t[DIFF_COLORS[p.color]] ?? t.muted).child(p.text)));
   }
 
   card(t, a, index, selected, record, now, marked) {
     const kind = statusKind(a.status);
-    const color = t[kind] ?? t.foreground;
+    // An exited shell is drawn dimmed (frame, title and text in muted)
+    const exited = kind === "exited";
+    const color = exited ? t.muted ?? t.foreground : t[kind] ?? t.foreground;
+    // Top-edge title: cyan for a worktree agent (crmux ui.rs format_title); body text: foreground. Both dimmed when exited
+    const titleColor = !exited && a.worktree ? t.ansi6 ?? color : color;
+    const textColor = exited ? color : t.foreground;
     const secs = Math.floor((now - (record?.since ?? now)) / 1000);
     const pulse = shouldPulse(a.status, secs, record?.hasWorked ?? false);
     const frame = div().id(`frame-${a.address}`).absolute().top(0).left(0).size_full()
@@ -420,13 +456,12 @@ export default class CrmuxList extends View {
       })
       .child(frame)
       .child(v_flex().px(9).py(5).gap(2)
-        // The title of a worktree agent is cyan (crmux ui.rs format_title); the frame stays the state color
-        .child(div().truncate().font_bold().text_color(a.worktree ? t.ansi6 ?? color : color)
+        .child(div().truncate().font_bold().text_color(titleColor)
           .child(cardLabel({ selected, index, project: a.project, branch: a.branch, worktree: a.worktree })))
         // Body: mark (* is green and bold, otherwise 2 spaces) and the terminal title (crmux ui.rs mark_span)
         .child(h_flex().min_w(0)
           .child(div().flex_none().whitespace_nowrap().font_bold().text_color(t.ansi2 ?? t.foreground).child(markPrefix(marked)))
-          .child(div().flex_1().min_w(0).truncate().text_color(t.foreground).child(a.title || " ")))
+          .child(div().flex_1().min_w(0).truncate().text_color(textColor).child(a.title || " ")))
         // Bottom edge: git diff summary on the left, state icon and elapsed time on the right
         .child(h_flex().justify_between().gap(6)
           .child(this.diff(t, a))

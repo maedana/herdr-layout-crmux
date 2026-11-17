@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatElapsed, statusKind, shouldPulse, trackStatuses, projectName, parseRepo, sortByProject, cardLabel, statusIcon, cycle, pickSelected } from "../mods/crmux-list/cards.js";
+import { formatElapsed, statusKind, shouldPulse, trackStatuses, projectName, parseRepo, sortByProject, cardLabel, statusIcon, cycle, pickSelected, exitedTerminals, neighbour } from "../mods/crmux-list/cards.js";
 
 test("under 60 seconds is shown as seconds, right-aligned to 2 digits", () => {
   assert.equal(formatElapsed(5), " 5s");
@@ -28,6 +28,10 @@ test("visual state: done and idle are both idle, working and blocked stay as the
   assert.equal(statusKind("idle"), "idle");
 });
 
+test("visual state: exited (an agent's shell after the agent ended) stays exited", () => {
+  assert.equal(statusKind("exited"), "exited");
+});
+
 test("waiting for input always pulses regardless of elapsed time or work history", () => {
   assert.equal(shouldPulse("blocked", 0, false), true);
   assert.equal(shouldPulse("blocked", 1000, true), true);
@@ -42,6 +46,10 @@ test("an agent that has worked pulses for only 5-15 seconds after becoming idle 
 
 test("an agent that has not worked does not pulse even when idle", () => {
   assert.equal(shouldPulse("idle", 10, false), false);
+});
+
+test("exited does not pulse even right after a working period", () => {
+  assert.equal(shouldPulse("exited", 10, true), false);
 });
 
 test("working does not pulse", () => {
@@ -80,6 +88,13 @@ test("no recount from done to idle (the same visual Idle)", () => {
 test("return the same object when nothing changed (no write to shared needed)", () => {
   const prev = { t1: { kind: "working", since: 1000, hasWorked: true } };
   assert.equal(trackStatuses(prev, [{ address: "t1", status: "working", seenAt: 0 }], 9000), prev);
+});
+
+test("count again from now when an agent becomes exited (time since it exited)", () => {
+  const prev = { t1: { kind: "idle", since: 1000, hasWorked: true } };
+  assert.deepEqual(trackStatuses(prev, [{ address: "t1", status: "exited", seenAt: 0 }], 9000), {
+    t1: { kind: "exited", since: 9000, hasWorked: true },
+  });
 });
 
 test("remove records of agents that are gone", () => {
@@ -172,6 +187,10 @@ test("state icons: working ⚡, waiting for input ⚠, idle / done 💤", () => 
   assert.equal(statusIcon("idle"), "💤");
 });
 
+test("state icon: exited ⏹", () => {
+  assert.equal(statusIcon("exited"), "⏹");
+});
+
 test("selection movement wraps around at the ends", () => {
   assert.equal(cycle(0, 1, 3), 1);
   assert.equal(cycle(2, 1, 3), 0);
@@ -190,4 +209,54 @@ test("how selection is decided: if there is no remembered selection, herdr's foc
   assert.equal(pickSelected(["t1", "t2"], "t9", "t2"), "t2");
   assert.equal(pickSelected(["t1", "t2"], null, "t9"), "t1");
   assert.equal(pickSelected([], "t1", "t1"), null);
+});
+
+// terminals() as hc ls --json gives them (status is a plain word, null for a plain shell)
+const term = (address, extra = {}) => ({ address, agent: "zsh", status: null, turn: 2, state: "live", ...extra });
+const paneOf = (terminal, pane = `p-${terminal}`) => ({ pane, terminal, tab: "tab1", title: "zsh", cwd: "/w", branch: "main" });
+
+test("exited terminals: a live shell with no status that has had a turn and is shown in a pane, with that pane", () => {
+  const p = paneOf("t2");
+  assert.deepEqual(exitedTerminals([term("t2")], [paneOf("t1"), p]), [{ address: "t2", pane: p }]);
+});
+
+test("exited terminals: agents (with a status) and plain shells that never had a turn are left out", () => {
+  const terms = [term("t1", { status: "idle", agent: "claude" }), term("t2", { turn: 0 }), term("t3", { turn: undefined })];
+  assert.deepEqual(exitedTerminals(terms, [paneOf("t1"), paneOf("t2"), paneOf("t3")]), []);
+});
+
+test("exited terminals: terminals that are not live or have no pane (e.g. parked) are left out", () => {
+  const terms = [term("t1", { state: "exited" }), term("t2")];
+  assert.deepEqual(exitedTerminals(terms, [paneOf("t1"), { pane: "m1", terminal: null, mod: "x", tab: "tab1" }]), []);
+});
+
+test("exited terminals: in terminals() order", () => {
+  const terms = [term("t3"), term("t1")];
+  const panes = [paneOf("t1"), paneOf("t3")];
+  assert.deepEqual(exitedTerminals(terms, panes).map((e) => e.address), ["t3", "t1"]);
+});
+
+test("exited terminals: nothing when terminals() or panes() is empty or missing", () => {
+  assert.deepEqual(exitedTerminals([], []), []);
+  assert.deepEqual(exitedTerminals(undefined, undefined), []);
+});
+
+test("selection after closing: the next one in the list, else the previous one, else none", () => {
+  assert.equal(neighbour(["t1", "t2", "t3"], "t2"), "t3");
+  assert.equal(neighbour(["t1", "t2", "t3"], "t3"), "t2");
+  assert.equal(neighbour(["t1"], "t1"), null);
+  assert.equal(neighbour(["t1", "t2"], "t9"), null);
+});
+
+test("exited terminals: left out while the shell runs something in front (vim, a server, an agent starting up)", () => {
+  const busy = { ...paneOf("t2"), program: { key: "nvim", shell: false } };
+  const atPrompt = { ...paneOf("t3"), program: { key: "shell", shell: true } };
+  assert.deepEqual(exitedTerminals([term("t2"), term("t3")], [busy, atPrompt]), [{ address: "t3", pane: atPrompt }]);
+});
+
+test("leaving exited starts hasWorked over, so an agent relaunched in that shell does not pulse as just finished", () => {
+  const prev = { t1: { kind: "exited", since: 1000, hasWorked: true } };
+  assert.deepEqual(trackStatuses(prev, [{ address: "t1", status: "idle", seenAt: 0 }], 9000), {
+    t1: { kind: "idle", since: 9000, hasWorked: false },
+  });
 });
