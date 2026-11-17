@@ -47,11 +47,27 @@ export function trackStatuses(records, list, now) {
   return changed ? next : records;
 }
 
-// Project name = basename of cwd (used for list order and headings, as in crmux)
+// Basename of cwd (fallback project name when the repository is not known: outside git, or before it is fetched)
 export function projectName(cwd) {
   if (!cwd) return "";
   const parts = cwd.split("/").filter(Boolean);
   return parts.length ? parts[parts.length - 1] : "/";
+}
+
+// Parse the 3-line output of `git rev-parse --path-format=absolute --git-common-dir --git-dir --show-toplevel`
+// into { project, worktree } (null when it cannot be read; all three must be absolute paths, since git before 2.31
+// echoes the unknown --path-format back as a line).
+// project: the repository name (worktrees are grouped under the original repository; repo/.git and repo/.bare give "repo").
+// worktree: the worktree directory name when git dir differs from the common dir, otherwise null
+export function parseRepo(stdout) {
+  const [common, gitDir, top] = String(stdout ?? "").split("\n").map((l) => l.trim());
+  if (![common, gitDir, top].every((l) => l?.startsWith("/"))) return null;
+  const parts = common.split("/").filter(Boolean);
+  const last = parts.pop();
+  const project = last === ".git" || last === ".bare" ? parts.pop() : last?.replace(/\.git$/, "");
+  if (!project) return null;
+  const worktree = gitDir !== common ? projectName(top) : null;
+  return { project, worktree };
 }
 
 // Ascending by project name (crmux state.rs sort_by). Same names keep their original order (agents() space, tab, pane order)
@@ -62,10 +78,11 @@ export function sortByProject(list) {
 // Number of agents selectable with number keys 1-9 (crmux MAX_NUMBER_KEYS)
 export const MAX_NUMBER_KEYS = 9;
 
-// Card top-edge title: "> 1.project/branch" (crmux ui.rs format_title)
-export function cardLabel({ selected, index, project, branch }) {
+// Card top-edge title: "> 1.project/branch" (crmux ui.rs format_title). Without a branch, a worktree is shown as "/worktree"
+export function cardLabel({ selected, index, project, branch, worktree }) {
   const number = index < MAX_NUMBER_KEYS ? `${index + 1}.` : "";
-  return `${selected ? "> " : ""}${number}${project}${branch ? `/${branch}` : ""}`;
+  const suffix = branch || worktree;
+  return `${selected ? "> " : ""}${number}${project}${suffix ? `/${suffix}` : ""}`;
 }
 
 const ICONS = { working: "⚡", blocked: "⚠", idle: "💤" };

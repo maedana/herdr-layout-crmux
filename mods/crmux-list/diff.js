@@ -39,8 +39,16 @@ export function diffSummary(staged, unstaged) {
   return parts;
 }
 
-// Key for looking up results (machine + cwd)
-export const diffKey = (machine, cwd) => `${machine ?? ""}\0${cwd}`;
+// Key for looking up results (machine + cwd): the cwd on this machine, "machine:cwd" on another (a cwd starts with "/",
+// so they never collide). No NUL: keys kept in shared are cut at one
+export const diffKey = (machine, cwd) => (machine ? `${machine}:${cwd}` : cwd);
+
+// Repositories to keep in shared: the known ones for the keys still in use, plus the new [key, repo] answers
+// (dropping the rest keeps the persisted map from growing with every folder ever visited)
+export function keepRepos(repos, keys, answered) {
+  const kept = keys.filter((k) => Object.hasOwn(repos, k)).map((k) => [k, repos[k]]);
+  return Object.fromEntries([...kept, ...answered]);
+}
 
 // Targets to run git diff on: the same cwd on the same machine only once. Skipped when there is no cwd
 export function diffTargets(list) {

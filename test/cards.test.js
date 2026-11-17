@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatElapsed, statusKind, shouldPulse, trackStatuses, projectName, sortByProject, cardLabel, statusIcon, cycle, pickSelected } from "../mods/crmux-list/cards.js";
+import { formatElapsed, statusKind, shouldPulse, trackStatuses, projectName, parseRepo, sortByProject, cardLabel, statusIcon, cycle, pickSelected } from "../mods/crmux-list/cards.js";
 
 test("under 60 seconds is shown as seconds, right-aligned to 2 digits", () => {
   assert.equal(formatElapsed(5), " 5s");
@@ -99,6 +99,42 @@ test("project name is an empty string when there is no cwd, and / for the root",
   assert.equal(projectName("/"), "/");
 });
 
+test("parseRepo: a normal repository gives the repo name and no worktree", () => {
+  const out = "/x/dotfiles/.git\n/x/dotfiles/.git\n/x/dotfiles\n";
+  assert.deepEqual(parseRepo(out), { project: "dotfiles", worktree: null });
+});
+
+test("parseRepo: a worktree is grouped under the original repo and keeps the worktree directory name", () => {
+  const out = [
+    "/home/maedana/src/github.com/SonicGarden/ga-pms/.git",
+    "/home/maedana/src/github.com/SonicGarden/ga-pms/.git/worktrees/pii-one-year-limit",
+    "/home/maedana/src/github.com/SonicGarden/ga-pms/.claude/worktrees/pii-one-year-limit",
+  ].join("\n");
+  assert.deepEqual(parseRepo(out), { project: "ga-pms", worktree: "pii-one-year-limit" });
+});
+
+test("parseRepo: a common dir not ending in .git (bare) uses its basename without a trailing .git", () => {
+  assert.deepEqual(parseRepo("/srv/repos/foo.git\n/srv/repos/foo.git\n/srv/work/foo\n"), { project: "foo", worktree: null });
+  assert.deepEqual(parseRepo("/srv/repos/bar\n/srv/repos/bar\n/srv/work/bar\n"), { project: "bar", worktree: null });
+});
+
+test("parseRepo: a bare repository in repo/.bare (worktrees beside it) uses the folder holding it", () => {
+  const out = "/x/myrepo/.bare\n/x/myrepo/.bare/worktrees/feat\n/x/myrepo/feat\n";
+  assert.deepEqual(parseRepo(out), { project: "myrepo", worktree: "feat" });
+});
+
+test("parseRepo: null unless all three lines are absolute paths (old git echoes --path-format back)", () => {
+  assert.equal(parseRepo("--path-format=absolute\n.git\n.git\n/x/foo\n"), null);
+});
+
+test("parseRepo: null when lines are missing or empty", () => {
+  assert.equal(parseRepo(""), null);
+  assert.equal(parseRepo("/x/a/.git\n/x/a/.git\n"), null);
+  assert.equal(parseRepo("/x/a/.git\n/x/a/.git"), null);
+  assert.equal(parseRepo("\n\n\n"), null);
+  assert.equal(parseRepo(null), null);
+});
+
 test("sort ascending by project name, keeping the original order for the same name", () => {
   const list = [
     { address: "t1", project: "zeta" },
@@ -118,6 +154,11 @@ test("sorting does not change the original array", () => {
 test("card top: > if selected, numbers start at 1, branch follows after /", () => {
   assert.equal(cardLabel({ selected: true, index: 0, project: "crmux", branch: "main" }), "> 1.crmux/main");
   assert.equal(cardLabel({ selected: false, index: 2, project: "dotfiles", branch: null }), "3.dotfiles");
+});
+
+test("card top: with no branch, a worktree is shown as /worktree (crmux format_title)", () => {
+  assert.equal(cardLabel({ selected: false, index: 0, project: "ga-pms", branch: null, worktree: "wt" }), "1.ga-pms/wt");
+  assert.equal(cardLabel({ selected: false, index: 0, project: "ga-pms", branch: "feat", worktree: "wt" }), "1.ga-pms/feat");
 });
 
 test("card top: no number from the 10th on (cannot be selected with keys 1-9)", () => {

@@ -15,8 +15,10 @@ and a vim-like Normal / Insert mode.
   `All`, `Marked` (only while something is marked), `@space` (one per space, only with 2+ spaces),
   `+project` (one per project). The current tab is shown as `[name]`; when the bar is too wide it
   scrolls to keep the current tab in the middle and shows `<` / `>`.
-- One card per agent in the current tab, sorted by project (the basename of its folder):
-  `> N.project/branch` on top, then the terminal title (prefixed with a green `* ` when marked),
+- One card per agent in the current tab, sorted by project (the name of its git
+  repository; agents in git worktrees are grouped under the original repository, and outside git
+  the folder's basename is used): `> N.project/branch` on top (a worktree agent without a branch
+  shows `N.project/worktree`, and its title is drawn in cyan), then the terminal title (prefixed with a green `* ` when marked),
   and at the bottom the git diff summary on the left and a status icon with the time since the
   status changed on the right (`⚡` working, `⚠` waiting for you, `💤` idle/done).
 - The git diff summary is read from each agent's folder every 5 seconds:

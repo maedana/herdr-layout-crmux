@@ -8,7 +8,7 @@ import {
   focused,
 } from "herdr";
 import {
-  formatElapsed, shouldPulse, trackStatuses, statusKind, statusIcon, projectName, sortByProject, cardLabel, cycle,
+  formatElapsed, shouldPulse, trackStatuses, statusKind, statusIcon, projectName, parseRepo, sortByProject, cardLabel, cycle,
   pickSelected,
 } from "./cards.js";
 import { nextArrange, previewTree, crmuxLayout, findNode, sameTree } from "./arrange.js";
@@ -16,7 +16,7 @@ import {
   buildTabs, filterByTab, tabIndex, cycleTab, keepSelection, tabLabel, tabTitle, tabBarWindow, toggleMark, pruneMarks,
   markPrefix,
 } from "./tabs.js";
-import { parseNumstat, diffSummary, diffTargets, diffKey } from "./diff.js";
+import { parseNumstat, diffSummary, diffTargets, diffKey, keepRepos } from "./diff.js";
 import { normalKey, scrollKey, scrollStep, scrollView } from "./keys.js";
 
 const LAYOUT = "crmux";
@@ -77,10 +77,10 @@ export default class CrmuxList extends View {
         cx.notify();
       }
     });
-    // Refresh the git diff summary every 5 seconds and redraw only when it changed
+    // Refresh the git diff summary every 5 seconds and redraw only when it changed (also resolves repositories not known yet)
     cx.spawn(async (cx) => {
       for (;;) {
-        await this.refreshDiffs(cx).catch(() => {});
+        await Promise.all([this.refreshRepos(cx).catch(() => {}), this.refreshDiffs(cx).catch(() => {})]);
         await cx.sleep(DIFF_MS);
       }
     });
@@ -92,16 +92,25 @@ export default class CrmuxList extends View {
     return shared("crmux.arrange") ?? DEFAULT_ARRANGE;
   }
 
+  // Repository of each cwd: diffKey(machine, cwd) -> { project, worktree }, or false outside git. Answers from git are kept
+  // for good, in shared so that the first render after a layout switch already groups by repository (and keeps a +project tab)
+  repos() {
+    return shared("crmux.repos") ?? {};
+  }
+
   // All agents (ascending by project name)
   items() {
     const byPane = new Map(panes().map((p) => [p.pane, p]));
     const bySpace = new Map(spaces().map((s) => [s.id, s]));
+    const repos = this.repos();
     return sortByProject(agents().map((a) => {
       const p = byPane.get(a.pane);
       const s = bySpace.get(a.space);
+      const repo = p?.cwd ? repos[diffKey(s?.machine ?? null, p.cwd)] : null;
       return {
         address: a.address, pane: a.pane, tab: a.tab, status: a.status, title: a.title,
-        project: projectName(p?.cwd) || a.space_name, branch: p?.branch ?? null,
+        project: repo?.project ?? (projectName(p?.cwd) || a.space_name), branch: p?.branch ?? null,
+        worktree: repo?.worktree ?? null,
         space: a.space, spaceName: a.space_name, spaceIndex: s?.index ?? 0,
         cwd: p?.cwd ?? null, machine: s?.machine ?? null,
       };
@@ -327,6 +336,18 @@ export default class CrmuxList extends View {
     cx.notify();
   }
 
+  // Resolve the repository of each agent cwd not asked yet (when git could not answer, e.g. a timeout, it is asked again on the next round)
+  async refreshRepos(cx) {
+    const all = diffTargets(this.items());
+    const targets = all.filter((t) => !Object.hasOwn(this.repos(), t.key));
+    if (!targets.length) return;
+    const results = await Promise.all(targets.map((t) => gitRepo(t)));
+    const answered = targets.map((t, i) => [t.key, results[i]]).filter(([, r]) => r !== null);
+    if (!answered.length) return;
+    setShared("crmux.repos", keepRepos(this.repos(), all.map((t) => t.key), answered));
+    cx.notify();
+  }
+
   // Refresh git diff for each agent cwd (once per distinct cwd) (crmux state.rs resolve_git_diff)
   async refreshDiffs(cx) {
     const targets = diffTargets(this.items());
@@ -408,8 +429,9 @@ export default class CrmuxList extends View {
       })
       .child(frame)
       .child(v_flex().px(9).py(5).gap(2)
-        .child(div().truncate().font_bold().text_color(color)
-          .child(cardLabel({ selected, index, project: a.project, branch: a.branch })))
+        // The title of a worktree agent is cyan (crmux ui.rs format_title); the frame stays the state color
+        .child(div().truncate().font_bold().text_color(a.worktree ? t.ansi6 ?? color : color)
+          .child(cardLabel({ selected, index, project: a.project, branch: a.branch, worktree: a.worktree })))
         // Body: mark (* is green and bold, otherwise 2 spaces) and the terminal title (crmux ui.rs mark_span)
         .child(h_flex().min_w(0)
           .child(div().flex_none().whitespace_nowrap().font_bold().text_color(t.ansi2 ?? t.foreground).child(markPrefix(marked)))
@@ -467,7 +489,7 @@ export default class CrmuxList extends View {
 // git diff summary for cwd (crmux state.rs resolve_git_diff). null (not shown) when it is not a git repository, git is missing, etc.
 // --no-optional-locks: do not take index.lock on the 5-second fetch (to avoid clashing with the user's own git operations)
 async function gitDiff({ cwd, machine }) {
-  const opts = { timeout: DIFF_MS, ...(machine ? { on: machine } : {}) };
+  const opts = gitOpts(machine);
   const git = (args) => exec("git", ["--no-optional-locks", "-C", cwd, "diff", ...args, "--numstat"], opts);
   try {
     const staged = await git(["--cached"]);
@@ -477,4 +499,21 @@ async function gitDiff({ cwd, machine }) {
   } catch {
     return null;
   }
+}
+
+// Repository name and worktree of cwd (crmux tmux.rs resolve_project_name). false when git says it is not a repository
+// (exit 128), null when git could not answer (missing, timed out, machine unreachable, etc.; asked again next round)
+async function gitRepo({ cwd, machine }) {
+  try {
+    const r = await exec("git", ["-C", cwd, "rev-parse", "--path-format=absolute", "--git-common-dir", "--git-dir", "--show-toplevel"], gitOpts(machine));
+    if (r.code === 0) return parseRepo(r.stdout) ?? false;
+    return r.code === 128 ? false : null;
+  } catch {
+    return null;
+  }
+}
+
+// exec options for git on the agent's machine
+function gitOpts(machine) {
+  return { timeout: DIFF_MS, ...(machine ? { on: machine } : {}) };
 }

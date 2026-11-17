@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseNumstat, diffSummary, diffTargets } from "../mods/crmux-list/diff.js";
+import { parseNumstat, diffSummary, diffTargets, diffKey, keepRepos } from "../mods/crmux-list/diff.js";
 
 test("numstat: file count and total added/deleted lines", () => {
   assert.deepEqual(parseNumstat("3\t1\tsrc/a.js\n10\t0\tREADME.md\n"), { files: 2, ins: 13, del: 1 });
@@ -48,8 +48,21 @@ test("targets: the same cwd on the same machine only once, those without cwd are
     { cwd: "/src/a", machine: "vps" },
     { cwd: null, machine: null },
   ]), [
-    { key: "\0/src/a", cwd: "/src/a", machine: null },
-    { key: "\0/src/b", cwd: "/src/b", machine: null },
-    { key: "vps\0/src/a", cwd: "/src/a", machine: "vps" },
+    { key: "/src/a", cwd: "/src/a", machine: null },
+    { key: "/src/b", cwd: "/src/b", machine: null },
+    { key: "vps:/src/a", cwd: "/src/a", machine: "vps" },
   ]);
+});
+
+test("diffKey: the cwd on this machine, machine:cwd on another; no NUL, since shared keys are cut at one", () => {
+  assert.equal(diffKey(null, "/src/a"), "/src/a");
+  assert.equal(diffKey(undefined, "/src/a"), "/src/a");
+  assert.equal(diffKey("vps", "/src/a"), "vps:/src/a");
+  assert.notEqual(diffKey("vps", "/src/a"), diffKey(null, "/src/a"));
+});
+
+test("keepRepos: adds the new answers and keeps only the cwds still in use", () => {
+  const repos = { "/src/a": { project: "a", worktree: null }, "/gone": { project: "g", worktree: null }, "": { project: "x", worktree: null } };
+  const next = keepRepos(repos, ["/src/a", "/tmp"], [["/tmp", false]]);
+  assert.deepEqual(next, { "/src/a": { project: "a", worktree: null }, "/tmp": false });
 });
