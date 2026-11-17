@@ -12,20 +12,23 @@ function spaceTabs(agents) {
   return [...byId.values()].sort((x, y) => x.index - y.index).map(({ index, ...tab }) => tab);
 }
 
-// Tab list (crmux state.rs rebuild_tabs): All -> Marked (if any marks) -> @space (if 2 or more) -> +project
+// Tab list (crmux state.rs rebuild_tabs): All -> Agents -> Marked (if any marks) -> @space (if 2 or more) -> +project.
+// Agents is always there (even with no shell to leave out), so ctrl-t 1 / ctrl-t 2 stay on All / Agents
 export function buildTabs(agents, marks) {
   const marked = agents.some((a) => marks.includes(a.address));
   const spaces = spaceTabs(agents);
   return [
     { kind: "all" },
+    { kind: "agents" },
     ...(marked ? [{ kind: "marked" }] : []),
     ...(spaces.length >= 2 ? spaces : []),
     ...uniqSorted(agents.map((a) => a.project)).map((value) => ({ kind: "project", value })),
   ];
 }
 
-// Agents filtered by tab (crmux state.rs filtered_sessions)
+// Agents filtered by tab (crmux state.rs filtered_sessions). Agents leaves the plain shells (status "exited") out
 export function filterByTab(agents, tab, marks) {
+  if (tab.kind === "agents") return agents.filter((a) => a.status !== "exited");
   if (tab.kind === "marked") return agents.filter((a) => marks.includes(a.address));
   if (tab.kind === "space") return agents.filter((a) => a.space === tab.value);
   if (tab.kind === "project") return agents.filter((a) => a.project === tab.value);
@@ -53,6 +56,7 @@ export function keepSelection(addresses, selected) {
 // (crmux showed the count only in a heading for the current tab; here every tab carries it instead)
 export function tabLabel(tab, count) {
   const name = tab.kind === "marked" ? "Marked"
+    : tab.kind === "agents" ? "Agents"
     : tab.kind === "space" ? `@${tab.name}`
     : tab.kind === "project" ? `+${tab.value}`
     : "All";

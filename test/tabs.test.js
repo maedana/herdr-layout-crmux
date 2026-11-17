@@ -6,28 +6,30 @@ import { buildTabs, filterByTab, tabIndex, cycleTab, keepSelection, tabLabel, ta
 const agent = (address, project, space = "s1", spaceName = "main", spaceIndex = 1) =>
   ({ address, project, space, spaceName, spaceIndex });
 
-test("tabs: All and a +project per project (ascending, no duplicates)", () => {
+test("tabs: All, Agents (always, so ctrl-t 2 stays put) and a +project per project (ascending, no duplicates)", () => {
   const tabs = buildTabs([agent("t1", "zeta"), agent("t2", "alpha"), agent("t3", "zeta")], []);
   assert.deepEqual(tabs, [
     { kind: "all" },
+    { kind: "agents" },
     { kind: "project", value: "alpha" },
     { kind: "project", value: "zeta" },
   ]);
 });
 
-test("tabs: if a present agent has a mark, Marked comes right after All", () => {
+test("tabs: if a present agent has a mark, Marked comes right after All and Agents", () => {
   const list = [agent("t1", "a"), agent("t2", "b")];
-  assert.deepEqual(buildTabs(list, ["t2"]).map((t) => t.kind), ["all", "marked", "project", "project"]);
+  assert.deepEqual(buildTabs(list, ["t2"]).map((t) => t.kind), ["all", "agents", "marked", "project", "project"]);
 });
 
 test("tabs: Marked is not shown if only agents that are gone have marks", () => {
-  assert.deepEqual(buildTabs([agent("t1", "a")], ["t9"]).map((t) => t.kind), ["all", "project"]);
+  assert.deepEqual(buildTabs([agent("t1", "a")], ["t9"]).map((t) => t.kind), ["all", "agents", "project"]);
 });
 
 test("tabs: with 2 or more spaces that have agents, @space comes in space order between Marked and +project", () => {
   const list = [agent("t1", "a", "s2", "work", 2), agent("t2", "b", "s1", "home", 1), agent("t3", "c", "s2", "work", 2)];
   assert.deepEqual(buildTabs(list, ["t1"]), [
     { kind: "all" },
+    { kind: "agents" },
     { kind: "marked" },
     { kind: "space", value: "s1", name: "home" },
     { kind: "space", value: "s2", name: "work" },
@@ -50,6 +52,11 @@ test("filter: All is everything, Marked is the marked ones, @space is that space
   assert.deepEqual(addrs(filterByTab(LIST, { kind: "marked" }, ["t3", "t1"])), ["t1", "t3"]);
   assert.deepEqual(addrs(filterByTab(LIST, { kind: "space", value: "s2", name: "x" }, [])), ["t2", "t3"]);
   assert.deepEqual(addrs(filterByTab(LIST, { kind: "project", value: "a" }, [])), ["t1", "t3"]);
+});
+
+test("filter: Agents leaves the plain shells out", () => {
+  const list = [agent("t1", "a"), { ...agent("t2", "a"), status: "exited" }, { ...agent("t3", "b"), status: "working" }];
+  assert.deepEqual(addrs(filterByTab(list, { kind: "agents" }, [])), ["t1", "t3"]);
 });
 
 const TABS = [{ kind: "all" }, { kind: "marked" }, { kind: "project", value: "a" }, { kind: "project", value: "b" }];
@@ -84,6 +91,7 @@ test("selection after tab switch: keep the same agent if it is in the new tab, o
 test("tab labels: All / Marked / @space / +project", () => {
   assert.equal(tabLabel({ kind: "all" }), "All");
   assert.equal(tabLabel({ kind: "marked" }), "Marked");
+  assert.equal(tabLabel({ kind: "agents" }), "Agents");
   assert.equal(tabLabel({ kind: "space", value: "s1", name: "work" }), "@work");
   assert.equal(tabLabel({ kind: "project", value: "crmux" }), "+crmux");
 });
@@ -98,7 +106,7 @@ test("tab labels with a count: name(N)", () => {
 test("tabBarLabels: each tab with the number of agents it shows", () => {
   const agents = [agent("t1", "crmux", "s1", "home", 1), agent("t2", "dotfiles", "s1", "home", 1), agent("t3", "crmux", "s2", "work", 2)];
   const tabs = buildTabs(agents, ["t2"]);
-  assert.deepEqual(tabBarLabels(tabs, agents, ["t2"]), ["All(3)", "Marked(1)", "@home(2)", "@work(1)", "+crmux(2)", "+dotfiles(1)"]);
+  assert.deepEqual(tabBarLabels(tabs, agents, ["t2"]), ["All(3)", "Agents(3)", "Marked(1)", "@home(2)", "@work(1)", "+crmux(2)", "+dotfiles(1)"]);
 });
 
 test("marks: add if absent, remove if present (the original array is not changed)", () => {
@@ -132,6 +140,7 @@ test("start of the card body: * if marked, otherwise 2 spaces (crmux ui.rs mark_
 test("tab key: one per tab, stable across renders (the space by its id, the project by its name)", () => {
   assert.equal(tabKey({ kind: "all" }), "all");
   assert.equal(tabKey({ kind: "marked" }), "marked");
+  assert.equal(tabKey({ kind: "agents" }), "agents");
   assert.equal(tabKey({ kind: "space", value: "s1", name: "work" }), "space:s1");
   assert.equal(tabKey({ kind: "project", value: "todotxt" }), "project:todotxt");
 });

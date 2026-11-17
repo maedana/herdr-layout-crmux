@@ -13,7 +13,7 @@ and a vim-like Normal / Insert mode.
 ## What you see
 
 - A tab bar in a full-width header row at the top of the window (above the list and the preview), with the number of agents in each tab:
-  `All(N)`, `Marked(N)` (only while something is marked), `@space(N)` (one per space, only with 2+ spaces),
+  `All(N)`, `Agents(N)` (the agents only, without the plain shells; always there, so `ctrl-t 2` stays on it), `Marked(N)` (only while something is marked), `@space(N)` (one per space, only with 2+ spaces),
   `+project(N)` (one per project). Tabs are drawn as rounded boxes and the current one is filled; when the bar is too wide it
   scrolls horizontally to keep the current tab visible. Click a tab to switch to it (like `h` / `l`);
   clicking a tab while a terminal has the keyboard (Insert) returns to Normal.
