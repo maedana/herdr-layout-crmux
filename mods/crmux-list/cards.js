@@ -18,14 +18,14 @@ export function statusKind(status) {
 }
 
 // Terminals that were agents and are now plain shells: no status, at least one turn (herdr-core keeps turn after
-// the agent exits; a shell that never ran an agent has turn 0), live, shown in a pane (parked ones have none), and with
-// the shell itself in front (not vim, a server, or an agent still starting up, which x must not kill).
+// the agent exits; a shell that never ran an agent has turn 0), live, and shown in a pane (parked ones have none).
+// What runs in front is not checked here: right after an agent exits the pane's program can still say the agent for a
+// moment, which would make the card blink out and back. x checks it instead (closable).
 // Returns [{ address, pane }] in terminals() order, where pane is the panes() entry showing it
 export function exitedTerminals(terminals, panes) {
   const byTerminal = new Map((panes ?? []).filter((p) => p.terminal).map((p) => [p.terminal, p]));
   return (terminals ?? [])
     .filter((t) => !t.status && (t.turn ?? 0) >= 1 && t.state === "live" && byTerminal.has(t.address))
-    .filter((t) => byTerminal.get(t.address).program?.shell !== false)
     .map((t) => ({ address: t.address, pane: byTerminal.get(t.address) }));
 }
 
@@ -119,6 +119,11 @@ export function statusIcon(status) {
 export function cycle(i, delta, n) {
   if (n <= 0) return 0;
   return (((i + delta) % n) + n) % n;
+}
+
+// x closes an exited shell only while the shell itself is in front (not vim, a server, or an agent starting up)
+export function closable(pane) {
+  return Boolean(pane) && pane.program?.shell !== false;
 }
 
 // Selection after address leaves the list (e.g. closed with x): the next one, else the previous one, else null

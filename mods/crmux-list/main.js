@@ -9,7 +9,7 @@ import {
 } from "herdr";
 import {
   formatElapsed, shouldPulse, trackStatuses, statusKind, statusIcon, projectName, parseRepo, sortByProject, cardLabel, cycle,
-  pickSelected, nextSelection, exitedTerminals, neighbour, previewLabels,
+  pickSelected, nextSelection, exitedTerminals, closable, neighbour, previewLabels,
 } from "./cards.js";
 import { nextArrange, previewTree, crmuxLayout, findNode, sameTree } from "./arrange.js";
 import {
@@ -262,7 +262,7 @@ export default class CrmuxList extends View {
   // x: close the selected exited shell's terminal (its pane, or its tab if it is the last pane, goes too) and select the
   // next one in the list (else the previous one). A live agent is never closed, so a running agent cannot be killed by mistake
   closeExited(sel, list) {
-    if (!sel || !this.isExited(sel)) return;
+    if (!sel || !this.isExited(sel) || !closable(panes().find((p) => p.terminal === sel))) return;
     const next = neighbour(list, sel);
     run("terminal.kill", { terminal: sel });
     if (!next) return this.relayout();

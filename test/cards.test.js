@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatElapsed, statusKind, shouldPulse, trackStatuses, projectName, parseRepo, sortByProject, cardLabel, previewLabels, statusIcon, cycle, pickSelected, nextSelection, exitedTerminals, neighbour } from "../mods/crmux-list/cards.js";
+import { formatElapsed, statusKind, shouldPulse, trackStatuses, projectName, parseRepo, sortByProject, cardLabel, previewLabels, statusIcon, cycle, pickSelected, nextSelection, exitedTerminals, closable, neighbour } from "../mods/crmux-list/cards.js";
 
 test("under 60 seconds is shown as seconds, right-aligned to 2 digits", () => {
   assert.equal(formatElapsed(5), " 5s");
@@ -260,10 +260,22 @@ test("selection after closing: the next one in the list, else the previous one, 
   assert.equal(neighbour(["t1", "t2"], "t9"), null);
 });
 
-test("exited terminals: left out while the shell runs something in front (vim, a server, an agent starting up)", () => {
-  const busy = { ...paneOf("t2"), program: { key: "nvim", shell: false } };
+test("exited terminals: kept whatever runs in front, so the card does not blink out while herdr-app catches up on the pane's program", () => {
+  // Right after an agent exits, the core already reports a plain shell but the pane's program can still say "claude"
+  const lagging = { ...paneOf("t2"), program: { key: "claude", shell: false, agent: true } };
   const atPrompt = { ...paneOf("t3"), program: { key: "shell", shell: true } };
-  assert.deepEqual(exitedTerminals([term("t2"), term("t3")], [busy, atPrompt]), [{ address: "t3", pane: atPrompt }]);
+  assert.deepEqual(exitedTerminals([term("t2"), term("t3")], [lagging, atPrompt]), [
+    { address: "t2", pane: lagging }, { address: "t3", pane: atPrompt },
+  ]);
+});
+
+test("closable: x closes an exited shell only while the shell itself is in front (not vim, a server, or an agent starting up)", () => {
+  assert.equal(closable({ program: { key: "shell", shell: true } }), true);
+  assert.equal(closable({ program: { key: "nvim", shell: false } }), false);
+  assert.equal(closable({ program: { key: "claude", shell: false, agent: true } }), false);
+  // Unknown program: allowed (as before)
+  assert.equal(closable({}), true);
+  assert.equal(closable(undefined), false);
 });
 
 test("leaving exited starts hasWorked over, so an agent relaunched in that shell does not pulse as just finished", () => {

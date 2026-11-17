@@ -66,7 +66,7 @@ Normal (the list has the keyboard):
 | `t` | toggle with the previous selection |
 | `h` / `←`, `l` / `→` | previous / next tab (wraps); the selection stays if the agent is in the new tab, else the first one |
 | `Space` | mark / unmark the selected agent (unmarking the last one on the `Marked` tab goes back to `All`) |
-| `x` | close the selected exited shell's terminal (no confirmation) and select the next card; does nothing on a live agent |
+| `x` | close the selected exited shell's terminal (no confirmation) and select the next card; does nothing on a live agent, or while something other than the shell runs in front (vim, a server, an agent starting up) |
 | `i` | Insert: move the keyboard to the selected agent's terminal |
 | `v` | next arrangement |
 | `ctrl-u` / `g g` | scroll the preview half a page up / to the top and enter Scroll |
