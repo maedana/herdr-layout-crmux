@@ -91,9 +91,14 @@ Other keys do nothing in Scroll. Selecting another agent (e.g. clicking a card) 
 Insert (a terminal has the keyboard): `Esc` returns to Normal (needs the `keys.json` entry below).
 Plain `Esc` therefore no longer reaches the program in this layout; press `Esc` twice to send it.
 
+Moving between panes with the main layout's `ctrl-t h/j/k/l` (`pane.go` does not work from a layout terminal block, so they
+are bound to `crmux-list.go-left` etc. in the `keys.json` entries below; other keys can be bound the same way): in Insert, the keyboard moves to the preview next
+to the one being typed into (it is selected in place and stays Insert), and going left from the leftmost one (or in Single)
+returns to the list (Normal). In Normal, right enters the selected preview (like `i`).
+
 The same actions can be run from a shell while the layout is shown, e.g.
 `herdr-app do crmux-list.arrange`, `crmux-list.down`, `crmux-list.select-2`, `crmux-list.normal`,
-`crmux-list.mark`, `crmux-list.tab-next`, `crmux-list.tab-prev`, `crmux-list.tab-<n>` (0 = the first tab; what a tab click sends), `crmux-list.scroll-up`, `crmux-list.line-down`, `crmux-list.close`, `crmux-list.shell`.
+`crmux-list.mark`, `crmux-list.tab-next`, `crmux-list.tab-prev`, `crmux-list.tab-<n>` (0 = the first tab; what a tab click sends), `crmux-list.scroll-up`, `crmux-list.line-down`, `crmux-list.close`, `crmux-list.shell`, `crmux-list.go-left` (`-right`, `-up`, `-down`).
 
 ## Install
 
@@ -110,7 +115,11 @@ Add to `~/.config/herdr-app/keys.json`:
     "ctrl-t m": "layout.switch:main"
   },
   "layout:crmux": {
-    "escape": "crmux-list.normal"
+    "escape": "crmux-list.normal",
+    "ctrl-t h": "crmux-list.go-left",
+    "ctrl-t j": "crmux-list.go-down",
+    "ctrl-t k": "crmux-list.go-up",
+    "ctrl-t l": "crmux-list.go-right"
   }
 }
 ```

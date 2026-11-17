@@ -133,3 +133,62 @@ export function sameTree(a, b) {
   if (ka.length !== Object.keys(b).length) return false;
   return ka.every((k) => sameTree(a[k], b[k]));
 }
+
+// --- Moving between previews (the main layout's pane keys, alt-h/j/k/l) ---
+
+const EPS = 1e-9;
+
+// Where each addressed preview sits in the right side, as fractions of it: { address: { x0, y0, x1, y1 } }. A row splits its
+// width and a column its height by the children's weights (1 unless given); gaps are left out. A preview is a column whose
+// first child is the crmux-title row; Single's has no address and is left out
+function cellRects(node, rect = { x0: 0, y0: 0, x1: 1, y1: 1 }, out = {}) {
+  const title = node?.children?.[0]?.content;
+  if (title?.mod === "crmux-title") {
+    if (title.props?.address) out[title.props.address] = rect;
+    return out;
+  }
+  const children = node?.children ?? [];
+  const weights = children.map((c) => c.size?.weight ?? 1);
+  const total = weights.reduce((a, b) => a + b, 0);
+  let at = 0;
+  children.forEach((child, i) => {
+    const from = at / total;
+    at += weights[i];
+    const to = at / total;
+    const lerp = (a, b, f) => a + (b - a) * f;
+    const part = node.type === "row"
+      ? { ...rect, x0: lerp(rect.x0, rect.x1, from), x1: lerp(rect.x0, rect.x1, to) }
+      : { ...rect, y0: lerp(rect.y0, rect.y1, from), y1: lerp(rect.y0, rect.y1, to) };
+    cellRects(child, part, out);
+  });
+  return out;
+}
+
+// How far r lies from cur in dir (null if it is not that way) and how much it overlaps cur across that direction
+function towards(cur, r, dir) {
+  const across = (a0, a1, b0, b1) => Math.min(a1, b1) - Math.max(a0, b0);
+  if (dir === "right" && r.x0 >= cur.x1 - EPS) return { gap: r.x0 - cur.x1, overlap: across(cur.y0, cur.y1, r.y0, r.y1) };
+  if (dir === "left" && r.x1 <= cur.x0 + EPS) return { gap: cur.x0 - r.x1, overlap: across(cur.y0, cur.y1, r.y0, r.y1) };
+  if (dir === "down" && r.y0 >= cur.y1 - EPS) return { gap: r.y0 - cur.y1, overlap: across(cur.x0, cur.x1, r.x0, r.x1) };
+  if (dir === "up" && r.y1 <= cur.y0 + EPS) return { gap: cur.y0 - r.y1, overlap: across(cur.x0, cur.x1, r.x0, r.x1) };
+  return null;
+}
+
+// The preview next to from in dir ("left" | "right" | "up" | "down") in the right side's tree (previewTree): the nearest one
+// that way that lines up with it, the one most in line on a tie (then the first). null when there is none that way (left
+// of the leftmost means the list), in Single, or when from is not shown
+export function goTarget(tree, from, dir) {
+  const rects = cellRects(tree);
+  const cur = rects[from];
+  if (!cur) return null;
+  let best = null;
+  for (const [address, r] of Object.entries(rects)) {
+    if (address === from) continue;
+    const t = towards(cur, r, dir);
+    if (!t || t.overlap <= EPS) continue;
+    if (!best || t.gap < best.gap - EPS || (Math.abs(t.gap - best.gap) <= EPS && t.overlap > best.overlap + EPS)) {
+      best = { address, ...t };
+    }
+  }
+  return best?.address ?? null;
+}

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { nextArrange, previewTree, crmuxLayout, findNode, sameTree } from "../mods/crmux-list/arrange.js";
+import { nextArrange, previewTree, crmuxLayout, findNode, sameTree, goTarget } from "../mods/crmux-list/arrange.js";
 
 test("arrangements cycle MainV -> Single -> Grid -> EvenH -> EvenV -> MainH -> MainV", () => {
   const seen = ["MainV"];
@@ -288,4 +288,51 @@ test("sameTree: true if the contents are the same even when key order or number 
 test("sameTree: false if the contents differ", () => {
   assert.equal(sameTree(previewTree("EvenH", ["t1", "t2"], "t1"), previewTree("EvenH", ["t1", "t2"], "t2")), false);
   assert.equal(sameTree(previewTree("EvenH", ["t1", "t2"], "t1"), null), false);
+});
+
+// Moving between previews with the main layout's pane keys (alt-h/j/k/l): the neighbour in that direction, from where the
+// arrangement puts each preview (weights included). null when there is none that way (left of the leftmost: the list)
+test("go: EvenH moves left / right along the row, nothing up / down", () => {
+  const tree = previewTree("EvenH", ["t1", "t2", "t3"], "t2");
+  assert.equal(goTarget(tree, "t2", "left"), "t1");
+  assert.equal(goTarget(tree, "t2", "right"), "t3");
+  assert.equal(goTarget(tree, "t3", "right"), null);
+  assert.equal(goTarget(tree, "t1", "left"), null);
+  assert.equal(goTarget(tree, "t2", "up"), null);
+});
+
+test("go: EvenV moves up / down", () => {
+  const tree = previewTree("EvenV", ["t1", "t2", "t3"], "t1");
+  assert.equal(goTarget(tree, "t1", "down"), "t2");
+  assert.equal(goTarget(tree, "t3", "up"), "t2");
+  assert.equal(goTarget(tree, "t1", "left"), null);
+});
+
+test("go: MainV goes right from the main to the nearest of the stack, and back left to the main", () => {
+  const tree = previewTree("MainV", ["t1", "t2", "t3"], "t1");
+  assert.equal(goTarget(tree, "t1", "right"), "t2");
+  assert.equal(goTarget(tree, "t3", "left"), "t1");
+  assert.equal(goTarget(tree, "t2", "down"), "t3");
+  assert.equal(goTarget(tree, "t1", "left"), null);
+});
+
+test("go: MainH goes down from the main into the row below and back up", () => {
+  const tree = previewTree("MainH", ["t1", "t2", "t3"], "t1");
+  assert.equal(goTarget(tree, "t1", "down"), "t2");
+  assert.equal(goTarget(tree, "t3", "up"), "t1");
+  assert.equal(goTarget(tree, "t2", "right"), "t3");
+});
+
+test("go: Grid moves by row and column; into a shorter last row it lands on the one most in line", () => {
+  // 5 previews: 3 columns, rows [t1 t2 t3] and [t4 t5] (t4 and t5 are each half the width)
+  const tree = previewTree("Grid", ["t1", "t2", "t3", "t4", "t5"], "t1");
+  assert.equal(goTarget(tree, "t1", "down"), "t4");
+  assert.equal(goTarget(tree, "t3", "down"), "t5");
+  assert.equal(goTarget(tree, "t5", "up"), "t3");
+  assert.equal(goTarget(tree, "t2", "right"), "t3");
+});
+
+test("go: Single (one preview with no address) and an address not shown give null", () => {
+  assert.equal(goTarget(previewTree("Single", ["t1", "t2"], "t1"), "t1", "right"), null);
+  assert.equal(goTarget(previewTree("EvenH", ["t1", "t2"], "t1"), "t9", "right"), null);
 });

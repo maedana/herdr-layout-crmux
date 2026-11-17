@@ -11,7 +11,7 @@ import {
   formatElapsed, shouldPulse, trackStatuses, statusKind, statusIcon, projectName, parseRepo, sortByProject, cardLabel, cycle,
   pickSelected, nextSelection, exitedTerminals, closable, neighbour, previewLabels, findNewShell,
 } from "./cards.js";
-import { nextArrange, previewTree, crmuxLayout, findNode, sameTree } from "./arrange.js";
+import { nextArrange, previewTree, crmuxLayout, findNode, sameTree, goTarget } from "./arrange.js";
 import {
   buildTabs, filterByTab, tabIndex, cycleTab, keepSelection, tabLabel, tabBarLabels, toggleMark, pruneMarks,
   markPrefix,
@@ -198,6 +198,8 @@ export default class CrmuxList extends View {
     const tabNo = /^tab-(\d+)$/.exec(name);
     // pick-<address> (a click on a preview's title row); the address may contain / (another machine's machine/t7)
     const pick = /^pick-(.+)$/.exec(name);
+    // go-<direction>: the main layout's pane keys (alt-h/j/k/l, ctrl-t h/j/k/l), bound for layout:crmux in keys.json
+    const go = /^go-(left|right|up|down)$/.exec(name);
     // Leaving Scroll mode with i puts the preview back at the bottom (crmux reset_preview_scroll)
     if (name === "insert" && this.scrolling()) this.scrollPreview(sel, "bottom");
     if (name === "down") this.select(list[cycle(at, 1, list.length)], v.items);
@@ -216,6 +218,7 @@ export default class CrmuxList extends View {
     else if (name === "close") this.closeExited(sel, list);
     else if (name === "shell") this.openShell(sel, v.all);
     else if (pick) this.pick(pick[1], v.items);
+    else if (go) this.go(go[1], sel, v.items);
   }
 
   // A click on a card or a preview's title row: select that agent. Leave Insert first: in Insert, keepFocus puts the
@@ -308,6 +311,23 @@ export default class CrmuxList extends View {
     return true;
   }
 
+  // The main layout's pane keys, here: pane.go does not work from a layout terminal block, so the list moves the keyboard
+  // between the previews itself. In Insert: to the preview next to the one being typed into (selected in place, like a
+  // click; it stays Insert), or back to the list going left from the leftmost (or from Single). In Normal: right enters
+  // the selected preview (like i); the other directions do nothing
+  go(dir, sel, items) {
+    if (!this.insert) {
+      if (dir !== "right") return;
+      if (this.scrolling()) this.scrollPreview(sel, "bottom");
+      return this.toInsert();
+    }
+    const target = goTarget(this.previewFor(items), sel, dir);
+    if (target) {
+      this.setSelection(target, { list: items.map((a) => a.address) });
+      this.relayout(items);
+    } else if (dir === "left") this.toList();
+  }
+
   // Space: toggle the mark on the selected one. An agent unmarked in the Marked tab disappears from the list
   // (removing the last mark removes the Marked tab and returns to All)
   markSelected(sel) {
@@ -362,12 +382,17 @@ export default class CrmuxList extends View {
   // or reclaim() outside it)
   applyLayout(items = this.view().items) {
     if (shared("layout") !== LAYOUT) return false;
-    const list = items.map((a) => a.address);
-    const exited = items.filter((a) => a.status === "exited").map((a) => a.address);
-    const want = previewTree(this.arrange(), list, this.selected(list), { exited, insert: this.insert, main: this.main(list) });
+    const want = this.previewFor(items);
     if (sameTree(want, findNode(layout(), "preview"))) return false;
     run("layout.set", { layout: crmuxLayout(want) });
     return true;
+  }
+
+  // The right side's tree for the current tab's list, arrangement, selection and mode
+  previewFor(items) {
+    const list = items.map((a) => a.address);
+    const exited = items.filter((a) => a.status === "exited").map((a) => a.address);
+    return previewTree(this.arrange(), list, this.selected(list), { exited, insert: this.insert, main: this.main(list) });
   }
 
   // Selection moves and layout.set move the keyboard to a right-side block, so put it back where the mode says
