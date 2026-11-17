@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatElapsed, statusKind, shouldPulse, trackStatuses, projectName, parseRepo, sortByProject, cardLabel, previewLabels, statusIcon, cycle, pickSelected, nextSelection, exitedTerminals, closable, neighbour } from "../mods/crmux-list/cards.js";
+import { formatElapsed, statusKind, shouldPulse, trackStatuses, projectName, parseRepo, sortByProject, cardLabel, previewLabels, statusIcon, cycle, pickSelected, nextSelection, exitedTerminals, closable, neighbour, findNewShell } from "../mods/crmux-list/cards.js";
 
 test("under 60 seconds is shown as seconds, right-aligned to 2 digits", () => {
   assert.equal(formatElapsed(5), " 5s");
@@ -199,8 +199,8 @@ test("state icons: working ⚡, waiting for input ⚠, idle / done 💤", () => 
   assert.equal(statusIcon("idle"), "💤");
 });
 
-test("state icon: exited ⏹", () => {
-  assert.equal(statusIcon("exited"), "⏹");
+test("state icon: none for a shell (its card shows no state or elapsed time: that is for agents)", () => {
+  assert.equal(statusIcon("exited"), null);
 });
 
 test("selection movement wraps around at the ends", () => {
@@ -232,9 +232,14 @@ test("exited terminals: a live shell with no status that has had a turn and is s
   assert.deepEqual(exitedTerminals([term("t2")], [paneOf("t1"), p]), [{ address: "t2", pane: p }]);
 });
 
-test("exited terminals: agents (with a status) and plain shells that never had a turn are left out", () => {
-  const terms = [term("t1", { status: "idle", agent: "claude" }), term("t2", { turn: 0 }), term("t3", { turn: undefined })];
-  assert.deepEqual(exitedTerminals(terms, [paneOf("t1"), paneOf("t2"), paneOf("t3")]), []);
+test("exited terminals: agents (with a status) are left out", () => {
+  const terms = [term("t1", { status: "idle", agent: "claude" })];
+  assert.deepEqual(exitedTerminals(terms, [paneOf("t1")]), []);
+});
+
+test("exited terminals: plain shells that never ran an agent are in too (any shell can be used from crmux)", () => {
+  const terms = [term("t2", { turn: 0 }), term("t3", { turn: undefined })];
+  assert.deepEqual(exitedTerminals(terms, [paneOf("t2"), paneOf("t3")]).map((e) => e.address), ["t2", "t3"]);
 });
 
 test("exited terminals: terminals that are not live or have no pane (e.g. parked) are left out", () => {
@@ -332,4 +337,18 @@ test("an unset selection resolves to herdr's focused agent: selecting it stores 
     nextSelection({ selected: undefined, main: undefined, prev: undefined, focusedAgent: "t2" }, LIST, { address: "t2" }),
     { selected: "t2", main: undefined, prev: undefined, changed: false },
   );
+});
+
+// The shell n opened: herdr gives no address back, so it is found as the first shell in that space that was not there before
+const shellItem = (address, extra = {}) => ({ address, status: "exited", space: "s1", ...extra });
+
+test("new shell: the first shell in the space that was not listed when n was pressed", () => {
+  const items = [shellItem("t1"), { address: "t2", status: "idle", space: "s1" }, shellItem("t3", { space: "s2" }), shellItem("t4"), shellItem("t5")];
+  assert.equal(findNewShell({ space: "s1", known: ["t1"] }, items), "t4");
+});
+
+test("new shell: none yet (still starting, or only agents / other spaces are new)", () => {
+  const items = [shellItem("t1"), { address: "t2", status: "working", space: "s1" }, shellItem("t3", { space: "s2" })];
+  assert.equal(findNewShell({ space: "s1", known: ["t1"] }, items), null);
+  assert.equal(findNewShell(null, items), null);
 });

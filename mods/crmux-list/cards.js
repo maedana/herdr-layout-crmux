@@ -17,16 +17,24 @@ export function statusKind(status) {
   return status === "working" || status === "blocked" || status === "exited" ? status : "idle";
 }
 
-// Terminals that were agents and are now plain shells: no status, at least one turn (herdr-core keeps turn after
-// the agent exits; a shell that never ran an agent has turn 0), live, and shown in a pane (parked ones have none).
+// Plain shells: no status, live, and shown in a pane (parked ones have none). Both the shell an exited agent left behind
+// and a shell that never ran an agent (turn 0, e.g. one opened with n to start a server): crmux does not tell them apart.
 // What runs in front is not checked here: right after an agent exits the pane's program can still say the agent for a
 // moment, which would make the card blink out and back. x checks it instead (closable).
 // Returns [{ address, pane }] in terminals() order, where pane is the panes() entry showing it
 export function exitedTerminals(terminals, panes) {
   const byTerminal = new Map((panes ?? []).filter((p) => p.terminal).map((p) => [p.terminal, p]));
   return (terminals ?? [])
-    .filter((t) => !t.status && (t.turn ?? 0) >= 1 && t.state === "live" && byTerminal.has(t.address))
+    .filter((t) => !t.status && t.state === "live" && byTerminal.has(t.address))
     .map((t) => ({ address: t.address, pane: byTerminal.get(t.address) }));
+}
+
+// The shell n opened (tab.new gives no address back): the first plain shell in pending.space that was not listed when n
+// was pressed (pending.known). null while it has not shown up yet, or when nothing is pending
+export function findNewShell(pending, items) {
+  if (!pending) return null;
+  const known = new Set(pending.known);
+  return items.find((a) => a.status === "exited" && a.space === pending.space && !known.has(a.address))?.address ?? null;
 }
 
 // Like crmux (ui.rs should_pulse), the completion pulse runs only 5-15 seconds after a working period
@@ -108,11 +116,12 @@ export function previewLabels(items) {
   }]));
 }
 
-const ICONS = { working: "⚡", blocked: "⚠", idle: "💤", exited: "⏹" };
+const ICONS = { working: "⚡", blocked: "⚠", idle: "💤" };
 
-// State icon at the right of the card's bottom edge (crmux ui.rs state_label)
+// State icon at the right of the card's bottom edge (crmux ui.rs state_label). null for a shell: its card shows neither
+// the state nor the elapsed time
 export function statusIcon(status) {
-  return ICONS[statusKind(status)];
+  return ICONS[statusKind(status)] ?? null;
 }
 
 // Position delta steps from i (wraps around at the ends)

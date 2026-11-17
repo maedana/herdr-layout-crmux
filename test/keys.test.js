@@ -31,6 +31,11 @@ test("Normal: x closes the selected one (main.js only closes exited ones)", () =
   assert.equal(normalKey("x", shift, false), null);
 });
 
+test("Normal: n opens a new shell (in the selected one's folder)", () => {
+  assert.equal(normalKey("n", plain, false), "shell");
+  assert.equal(normalKey("n", shift, false), null);
+});
+
 test("Scroll: j/k scroll the preview by one line instead of moving the selection (crmux handle_scroll_mode)", () => {
   assert.equal(scrollKey("j", plain, false), "line-down");
   assert.equal(scrollKey("down", plain, false), "line-down");

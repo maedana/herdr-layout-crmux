@@ -4,9 +4,9 @@ import { footerParts } from "../mods/crmux-footer/footer.js";
 
 const text = (parts) => parts.map((p) => p.text).join("");
 
-test("Normal: app name and key hints (including h/l tab switching, Space for marks and x for exited ones), v shows the next arrangement", () => {
+test("Normal: app name and key hints (including h/l tab switching, Space for marks, n for a new shell and x to close a shell), v shows the next arrangement", () => {
   assert.equal(text(footerParts("normal", "Single")),
-    "crmux | hjkl/1-9/t:Nav C-u:ScrollUp Space:Mark x:Close(exited) v:Single i:Insert q:Main");
+    "crmux | hjkl/1-9/t:Nav C-u:ScrollUp Space:Mark n:Shell x:Close(shell) v:Single i:Insert q:Main");
 });
 
 test("Insert: -- INSERT -- in bold, showing that Esc goes back", () => {

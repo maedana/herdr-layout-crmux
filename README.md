@@ -20,7 +20,7 @@ and a vim-like Normal / Insert mode.
   (crmux shows the count only in a heading for the current tab; here the tabs carry it and there is no heading.)
 - One card per agent in the current tab, sorted by project (the name of its git
   repository; agents in git worktrees are grouped under the original repository, and outside git
-  the folder's basename is used): `> N.project/branch` on top (a worktree agent without a branch
+  the folder's basename is used): the program's icon (as in the preview's title row: an agent's or the shell's) and `> N.project/branch` on top (a worktree agent without a branch
   shows `N.project/worktree`, and its title is drawn in cyan), then the terminal title (prefixed with a green `* ` when marked),
   and at the bottom the git diff summary on the left and a status icon with the time since the
   status changed on the right (`⚡` working, `⚠` waiting for you, `💤` idle/done).
@@ -29,16 +29,17 @@ and a vim-like Normal / Insert mode.
   unstaged together), or `no changes`. Nothing is shown outside a git repository.
 - Card colors follow the theme (`working` / `blocked` / `idle`). Waiting cards pulse; a card that
   was working pulses for 5–15 seconds after it stops.
-- When an agent exits, its terminal is left as a plain shell and is no longer an agent. Such shells (a live
-  terminal shown in a pane with no status and a `turn` of 1 or more; a shell that never ran an agent has `turn` 0)
-  stay in the list as dimmed cards (`muted`) with `⏹` and the time since the agent exited. Selecting one shows the
-  shell in the preview; `x` closes its terminal (and its pane, or its tab if it was the last pane).
+- Plain shells are listed too: every live terminal shown in a pane that is not an agent (no status). That is both the
+  shell an agent leaves behind when it exits and a shell that never ran an agent (e.g. one opened with `n` to start a
+  server); crmux does not tell them apart. They are dimmed cards (`muted`) without the state and elapsed time at the bottom
+  right (those are for agents), grouped by project like the agents (so a `+project` tab shows that repository's agents and shells together).
+  Selecting one shows the shell in the preview; `x` closes its terminal (and its pane, or its tab if it was the last pane).
 - The right side shows real terminals. `v` cycles the arrangement:
   MainV → Single → Grid → EvenH → EvenV → MainH (Main* put the selected agent in the main slot).
   Only the agents in the current tab are shown, numbered and navigated.
   Clicking a preview selects it in place without rearranging; selecting from the list (keys, a card, a title row, a tab switch) brings that agent to the main pane.
 - Each preview terminal has a 30px title row above it, in the look of herdr-app's own pane header: the program's icon,
-  `N.project/branch` (the card's label; cyan for a worktree agent, dimmed for an exited shell), the terminal title (dimmed),
+  `N.project/branch` (the card's label; cyan for a worktree agent, dimmed for a shell), the terminal title (dimmed),
   and the status on the right (a spinner while working, a "Needs you" badge while blocked, a dot when done, nothing when idle).
   The selection is shown by the preview's border. In Single the row follows the selection.
   Click a title row to select that agent (like clicking its card; in Insert it returns to Normal first).
@@ -66,7 +67,8 @@ Normal (the list has the keyboard):
 | `t` | toggle with the previous selection |
 | `h` / `←`, `l` / `→` | previous / next tab (wraps); the selection stays if the agent is in the new tab, else the first one |
 | `Space` | mark / unmark the selected agent (unmarking the last one on the `Marked` tab goes back to `All`) |
-| `x` | close the selected exited shell's terminal (no confirmation) and select the next card; does nothing on a live agent, or while something other than the shell runs in front (vim, a server, an agent starting up) |
+| `n` | open a plain shell in a new background tab of the selected one's space, in its folder, then select it and enter Insert (to run a server or a command outside the agents) |
+| `x` | close the selected shell's terminal (no confirmation) and select the next card; does nothing on a live agent, or while something other than the shell runs in front (vim, a server, an agent starting up) |
 | `i` | Insert: move the keyboard to the selected agent's terminal |
 | `v` | next arrangement |
 | `ctrl-u` / `g g` | scroll the preview half a page up / to the top and enter Scroll |
@@ -91,7 +93,7 @@ Plain `Esc` therefore no longer reaches the program in this layout; press `Esc` 
 
 The same actions can be run from a shell while the layout is shown, e.g.
 `herdr-app do crmux-list.arrange`, `crmux-list.down`, `crmux-list.select-2`, `crmux-list.normal`,
-`crmux-list.mark`, `crmux-list.tab-next`, `crmux-list.tab-prev`, `crmux-list.tab-<n>` (0 = the first tab; what a tab click sends), `crmux-list.scroll-up`, `crmux-list.line-down`, `crmux-list.close`.
+`crmux-list.mark`, `crmux-list.tab-next`, `crmux-list.tab-prev`, `crmux-list.tab-<n>` (0 = the first tab; what a tab click sends), `crmux-list.scroll-up`, `crmux-list.line-down`, `crmux-list.close`, `crmux-list.shell`.
 
 ## Install
 

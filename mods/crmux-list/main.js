@@ -1,7 +1,7 @@
 // crmux-style card list (left) and Normal mode key handling.
 // The preview on the right is the layout's agent / terminal blocks (real terminals); the arrangement is swapped with layout.set.
 // Switching layouts recreates this mod, so state to keep (selection, arrangement, transition records, marks, tabs, tab bar) lives in shared.
-import { View, div } from "gpui-kit";
+import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, ScrollHandle } from "gpui-base";
 import {
   agents, terminals, panes, spaces, run, hc, exec, shared, setShared, theme, settings, layout, checking, nextCommand,
@@ -9,7 +9,7 @@ import {
 } from "herdr";
 import {
   formatElapsed, shouldPulse, trackStatuses, statusKind, statusIcon, projectName, parseRepo, sortByProject, cardLabel, cycle,
-  pickSelected, nextSelection, exitedTerminals, closable, neighbour, previewLabels,
+  pickSelected, nextSelection, exitedTerminals, closable, neighbour, previewLabels, findNewShell,
 } from "./cards.js";
 import { nextArrange, previewTree, crmuxLayout, findNode, sameTree } from "./arrange.js";
 import {
@@ -32,6 +32,10 @@ const SETTLE_MS = 300;
 // Pulse for waiting-for-input / just-finished (crmux swings the border between 50-100% with sin(t*16), a period of about 0.4s)
 const PULSE = { from: 0.5, to: 1, period: 400 };
 const EMOJI_FONT = "Noto Color Emoji";
+// How long n waits for the shell it opened to show up before giving up on selecting it
+const NEW_SHELL_MS = 10000;
+// Size of the program icon before a card's label (the preview's title row uses 14 for 12px text)
+const ICON_PX = 14;
 // Interval to refresh the git diff summary (5 seconds, same as crmux app.rs)
 const DIFF_MS = 5000;
 // diffSummary color role -> theme color name (ansi1 red, ansi2 green, ansi3 yellow)
@@ -58,6 +62,8 @@ export default class CrmuxList extends View {
     // git diff summary: diffKey(machine, cwd) -> diffSummary result (kept only inside the mod)
     this.diffs = {};
     this.diffSig = "";
+    // The shell n opened, until it shows up in the list: { space, known, until } (see findNewShell)
+    this.pendingShell = null;
     if (checking()) return;
 
     this.setInsert(false);
@@ -116,6 +122,8 @@ export default class CrmuxList extends View {
         worktree: repo?.worktree ?? null,
         space: a.space, spaceName: a.space_name, spaceIndex: s?.index ?? 0,
         cwd: p?.cwd ?? null, machine: s?.machine ?? null,
+        // The program's icon, as the preview's title row (and herdr's pane header) shows it: the agent's, else the pane's
+        program: a.program ?? p?.program ?? null,
       };
     };
     // An exited shell is not in agents(), so take what agents() would give from its pane and the space holding its tab
@@ -206,6 +214,7 @@ export default class CrmuxList extends View {
     else if (name === "tab-prev") this.switchTab(-1, sel);
     else if (tabNo) this.clickTab(v.tabs[Number(tabNo[1])], sel);
     else if (name === "close") this.closeExited(sel, list);
+    else if (name === "shell") this.openShell(sel, v.all);
     else if (pick) this.pick(pick[1], v.items);
   }
 
@@ -268,6 +277,35 @@ export default class CrmuxList extends View {
     if (!next) return this.relayout();
     this.setSelection(next, { promote: true, remember: false });
     this.focusAgent(next);
+  }
+
+  // n: open a plain shell in a new background tab of the selected one's space, starting in its folder (to start a server
+  // or run a command outside the agents). tab.new gives no address back, so tick picks the shell up when it shows up
+  // (adoptNewShell), selects it and enters Insert. With nothing selected it opens in the shown space
+  openShell(sel, all) {
+    const a = all.find((i) => i.address === sel);
+    const space = a?.space ?? focused()?.space;
+    if (!space) return;
+    this.pendingShell = { space, known: all.map((i) => i.address), until: Date.now() + NEW_SHELL_MS };
+    run("tab.new", { space, ...(a?.cwd ? { folder: a.cwd } : {}), focus: false });
+  }
+
+  // The shell n opened has shown up: select it and type into it. Returns whether it acted (it has re-laid out then).
+  // Given up after NEW_SHELL_MS, and when it is not in the current tab (e.g. Marked) it is only listed, not selected
+  adoptNewShell() {
+    if (!this.pendingShell) return false;
+    if (Date.now() > this.pendingShell.until) {
+      this.pendingShell = null;
+      return false;
+    }
+    const v = this.view();
+    const address = findNewShell(this.pendingShell, v.all);
+    if (!address) return false;
+    this.pendingShell = null;
+    if (!v.items.some((a) => a.address === address)) return false;
+    this.select(address, v.items);
+    this.toInsert();
+    return true;
   }
 
   // Space: toggle the mark on the selected one. An agent unmarked in the Marked tab disappears from the list
@@ -484,6 +522,7 @@ export default class CrmuxList extends View {
   // Every second: redraw only when the display (elapsed time, pulse presence, the list's border) changed. Re-arrange as
   // agents come and go
   tick(cx) {
+    if (this.adoptNewShell()) return cx.notify();
     const { items } = this.view();
     const moved = this.syncFocus(items.map((a) => a.address));
     // Agents came or went: layout.set moved the keyboard, so reclaim it (only then, not every second)
@@ -597,19 +636,23 @@ export default class CrmuxList extends View {
       })
       .child(frame)
       .child(v_flex().px(9).py(5).gap(2)
-        .child(div().truncate().font_bold().text_color(titleColor)
-          .child(cardLabel({ selected, index, project: a.project, branch: a.branch, worktree: a.worktree })))
+        // Top: the program's icon (tells an agent from a shell at a glance), then the label
+        .child(h_flex().min_w(0).gap(6).items_center()
+          .when(Boolean(a.program?.icon), (el) => el.child(programIcon(a.program, ICON_PX, exited ? color : t.dim ?? t.muted)))
+          .child(div().flex_1().min_w(0).truncate().font_bold().text_color(titleColor)
+            .child(cardLabel({ selected, index, project: a.project, branch: a.branch, worktree: a.worktree }))))
         // Body: mark (* is green and bold, otherwise 2 spaces) and the terminal title (crmux ui.rs mark_span)
         .child(h_flex().min_w(0)
           .child(div().flex_none().whitespace_nowrap().font_bold().text_color(t.ansi2 ?? t.foreground).child(markPrefix(marked)))
           .child(div().flex_1().min_w(0).truncate().text_color(textColor).child(a.title || " ")))
-        // Bottom edge: git diff summary on the left, state icon and elapsed time on the right
+        // Bottom edge: git diff summary on the left, state icon and elapsed time on the right (agents only: a shell has
+        // no state, its icon at the top already tells it apart)
         .child(h_flex().justify_between().gap(6)
           .child(this.diff(t, a))
-          .child(h_flex().flex_none().gap(6).text_color(color)
+          .when(!exited, (el) => el.child(h_flex().flex_none().gap(6).text_color(color)
             // With the monospace fallback font (Cica), 💤 becomes a different monochrome glyph, so draw it with an emoji font
             .child(div().when(kind === "idle", (el) => el.font_family(EMOJI_FONT)).child(statusIcon(a.status)))
-            .child(formatElapsed(secs)))));
+            .child(formatElapsed(secs))))));
   }
 
   render() {
@@ -658,6 +701,12 @@ export default class CrmuxList extends View {
 function publishIfChanged(key, value) {
   if (checking() || JSON.stringify(value) === JSON.stringify(shared(key))) return;
   setShared(key, value);
+}
+
+// The program's icon, the same as the preview's title row and herdr's pane header: a one-color glyph is tinted, others are
+// drawn as they are
+function programIcon(program, size, color) {
+  return program.tint ? svg(program.icon).size(size).flex_none().text_color(color) : image(program.icon).w(size).h(size).flex_none();
 }
 
 // git diff summary for cwd (crmux state.rs resolve_git_diff). null (not shown) when it is not a git repository, git is missing, etc.
