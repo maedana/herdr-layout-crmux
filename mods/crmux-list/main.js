@@ -280,14 +280,15 @@ export default class CrmuxList extends View {
     this.keepFocus(() => this.applyLayout());
   }
 
-  // Build the right side from the arrangement, list (items: the current tab's, from view()), and selection, and swap it
-  // via layout.set if it differs from the current layout. Returns whether it sent layout.set (which moves the keyboard to a
-  // right-side block, so the caller reclaims it: keepFocus, or reclaim() outside it)
+  // Build the right side from the arrangement, list (items: the current tab's, from view()), selection and mode (the frame
+  // of the preview being typed into in Insert is accent), and swap it via layout.set if it differs from the current layout.
+  // Returns whether it sent layout.set (which moves the keyboard to a right-side block, so the caller reclaims it: keepFocus,
+  // or reclaim() outside it)
   applyLayout(items = this.view().items) {
     if (shared("layout") !== LAYOUT) return false;
     const list = items.map((a) => a.address);
     const exited = items.filter((a) => a.status === "exited").map((a) => a.address);
-    const want = previewTree(this.arrange(), list, this.selected(list), exited);
+    const want = previewTree(this.arrange(), list, this.selected(list), exited, this.insert);
     if (sameTree(want, findNode(layout(), "preview"))) return false;
     run("layout.set", { layout: crmuxLayout(want) });
     return true;
@@ -334,15 +335,17 @@ export default class CrmuxList extends View {
       setShared("crmux.prev", cur);
       setShared("crmux.selected", action.address);
     }
-    // In Insert another preview was clicked: it is now the one being typed into, so only the selection follows
-    if (action.type === "select") return true;
     // A preview holds it while the list thinks it is Normal (the user clicked it): Insert on that preview.
     // Like toInsert from Scroll mode, the preview goes back to the bottom
-    if (this.scrolling()) this.scrollPreview(cur, "bottom");
-    this.insert = true;
-    setShared("crmux.mode", "insert");
-    // The keyboard is already there, but the new selection re-sets the layout (e.g. the main slot), which may move it
-    if (action.address !== cur) this.keepFocus(() => this.applyLayout());
+    if (action.type === "enter") {
+      if (this.scrolling()) this.scrollPreview(cur, "bottom");
+      this.insert = true;
+      setShared("crmux.mode", "insert");
+    }
+    // Entering Insert, or (in Insert) another preview was clicked and is now the one being typed into: the accent frame moves
+    // there (and a new selection may change the main slot). The keyboard is already there, but layout.set may move it, and
+    // the reclaim (pane.focus on the new selection) keeps syncFocus from reading that move as a click
+    this.keepFocus(() => this.applyLayout());
     return true;
   }
 
@@ -353,21 +356,21 @@ export default class CrmuxList extends View {
     return true;
   }
 
-  // Normal, with the keyboard reclaimed for the list
+  // Normal, with the keyboard reclaimed for the list (the accent frame leaves the preview, so the layout is re-set first)
   toList() {
     this.insert = false;
     setShared("crmux.mode", "normal");
-    this.keepFocus(() => {});
+    this.keepFocus(() => this.applyLayout());
   }
 
+  // Insert on the selected agent: its frame turns accent (layout.set), then the reclaim puts the keyboard in its terminal
+  // (refocus in Insert is pane.focus on the selection). Until that takes effect the keyboard is still in the list (or
+  // wherever layout.set left it), which the settle window keeps syncFocus from reading as a click
   toInsert() {
-    const sel = this.selected();
-    if (!sel) return;
+    if (!this.selected()) return;
     this.insert = true;
-    // The keyboard is still in the list until pane.focus takes effect, which is not a click
-    this.settleUntil = Date.now() + SETTLE_MS;
     setShared("crmux.mode", "insert");
-    run("pane.focus", { terminal: sel });
+    this.keepFocus(() => this.applyLayout());
   }
 
   // Esc from a terminal. Also from Normal while the keyboard is in a terminal anyway (a clicked preview syncFocus has not seen yet)
@@ -593,7 +596,7 @@ export default class CrmuxList extends View {
     // A mod block does not honor the layout's `focus` border, so the list draws its own: accent while it has the keyboard
     this.drawnFocus = this.handle.is_focused();
     return v_flex().id("crmux-list").track_focus(this.handle).size_full().min_h(0)
-      .border_1().border_color(this.drawnFocus ? t.accent ?? t.foreground : t.border ?? t.muted)
+      .rounded(6).border_1().border_color(this.drawnFocus ? t.accent ?? t.foreground : t.border ?? t.muted)
       .font_family(settings().font_family ?? "JetBrains Mono").text_size(12)
       .on_key_down((e, cx) => this.onKey(e, cx))
       .on_mouse_down("left", (_e, cx) => {

@@ -10,52 +10,55 @@ export function nextArrange(arrange) {
 // Tree for the right side (id "preview"). addresses is in list order, selected is the selected address
 const GAP = 4;
 
-// Borders show where the keyboard is: every preview keeps a 1px border (so nothing resizes) that turns accent while
-// the focused pane is inside it (node-level focus). The selected preview in a multi-pane display has a light border instead
-const border = (color) => ({ width: 1, color });
-const FOCUS = { border: { width: 1, color: "accent" } };
-// Height of the title row above each preview terminal
-const TITLE_PX = 20;
+// Borders show where the keyboard is. Every preview is one rounded 1px frame around its title row and terminal (like
+// herdr-app's own pane; 1px always, so nothing resizes). The layout's `focus` does not light up for a terminal block inside
+// the column, so the color follows the list's mode instead: accent on the preview being typed into in Insert, a light frame
+// on the selected one in a multi-pane display otherwise (so you can see which one i enters), gray for the rest
+const frame = (color) => ({ width: 1, color });
+// Corner radius of the frame (herdr's pane radius). The terminal block inside is rounded by 1px less (the frame's border
+// width) so its corners stay inside the frame's arc
+const RADIUS = 6;
+// Height of the title row above each preview terminal (the same as herdr-app's own pane header)
+const TITLE_PX = 30;
 
-// A preview: a column of the title row (crmux-title mod, "> N.project/branch - title" like crmux's preview border title)
-// and the terminal block. frame (size, border, focus) goes on the column, so the border surrounds the title row too.
-// titleProps is what the title row is given ({} follows crmux.selected)
-function titled(id, titleProps, content, frame) {
+// A preview: a column of the title row (crmux-title mod, icon, N.project/branch, terminal title and status like the pane header)
+// and the terminal block. The size and the frame go on the column, so the frame surrounds the title row too. The column
+// paints the background inside its rounded frame; the title row has no square background of its own (the mod rounds its
+// top corners). titleProps is what the title row is given ({} follows crmux.selected)
+function titled(id, titleProps, content, color, extra = {}) {
   return {
-    id, type: "column", ...frame,
+    id, type: "column", ...extra, border: frame(color), radius: RADIUS, background: "background",
     children: [
-      { id: `${id}-title`, type: "block", size: { px: TITLE_PX }, background: "background", content: { mod: "crmux-title", ...titleProps } },
-      { id: `${id}-body`, type: "block", content },
+      { id: `${id}-title`, type: "block", size: { px: TITLE_PX }, content: { mod: "crmux-title", ...titleProps } },
+      { id: `${id}-body`, type: "block", radius: RADIUS - 1, content },
     ],
   };
 }
 
 // Single's title row is given no address: it follows crmux.selected, so a j/k (agent.focus) does not need a layout.set
-const single = (content = { agent: "focused" }) => titled("preview", {}, content, { border: border("border"), focus: FOCUS });
+const single = (insert, content = { agent: "focused" }) => titled("preview", {}, content, insert ? "accent" : "border");
 
-// Preview for one agent. The selected one has a light border (accent only while the keyboard is inside)
-function cell(address, selected, extra = {}) {
+// Preview for one agent. The selected one is accent in Insert, light otherwise
+function cell(address, selected, insert, extra = {}) {
   const id = `pv-${address.replace(/[^A-Za-z0-9_-]/g, "_")}`;
-  return titled(id, { props: { address } }, { terminal: address }, {
-    ...extra,
-    border: border(address === selected ? "foreground" : "border"),
-    focus: FOCUS,
-  });
+  const color = address !== selected ? "border" : insert ? "accent" : "foreground";
+  return titled(id, { props: { address } }, { terminal: address }, color, extra);
 }
 
 const split = (type, children, extra = {}) => ({ type, gap: GAP, ...extra, children });
 
-// exited: addresses of exited shells (not agents, so agent.focus cannot put them in the Single agent block; show the terminal itself)
-export function previewTree(arrange, addresses, selected, exited = []) {
+// exited: addresses of exited shells (not agents, so agent.focus cannot put them in the Single agent block; show the terminal itself).
+// insert: the list is in Insert (the selected preview is being typed into, so its frame is accent)
+export function previewTree(arrange, addresses, selected, exited = [], insert = false) {
   if (arrange === "Single" || addresses.length <= 1) {
-    return exited.includes(selected) ? single({ terminal: selected }) : single();
+    return exited.includes(selected) ? single(insert, { terminal: selected }) : single(insert);
   }
-  const cells = addresses.map((a) => cell(a, selected));
+  const cells = addresses.map((a) => cell(a, selected, insert));
   if (arrange === "EvenH") return split("row", cells, { id: "preview" });
   if (arrange === "EvenV") return split("column", cells, { id: "preview" });
-  if (arrange === "MainV" || arrange === "MainH") return mainTree(arrange, addresses, selected);
+  if (arrange === "MainV" || arrange === "MainH") return mainTree(arrange, addresses, selected, insert);
   if (arrange === "Grid") return gridTree(cells);
-  return single();
+  return single(insert);
 }
 
 // MainV / MainH: selected agent as the main pane (crmux moves the selected one to the front). The main ratio is
@@ -65,12 +68,12 @@ const MAIN = {
   MainH: { type: "column", rest: "row", main: 6, other: 4 },
 };
 
-function mainTree(arrange, addresses, selected) {
+function mainTree(arrange, addresses, selected, insert) {
   const m = MAIN[arrange];
   const main = addresses.includes(selected) ? selected : addresses[0];
-  const rest = addresses.filter((a) => a !== main).map((a) => cell(a, selected));
+  const rest = addresses.filter((a) => a !== main).map((a) => cell(a, selected, insert));
   return split(m.type, [
-    cell(main, selected, { size: { weight: m.main } }),
+    cell(main, selected, insert, { size: { weight: m.main } }),
     split(m.rest, rest, { id: "pv-rest", size: { weight: m.other } }),
   ], { id: "preview" });
 }
@@ -86,7 +89,7 @@ function gridTree(cells) {
   return split("column", rows, { id: "preview" });
 }
 
-// Whole crmux layout passed to layout.set (only preview is swapped). layouts/crmux.json is the same as this with Single.
+// Whole crmux layout passed to layout.set (only preview is swapped). layouts/crmux.json is the same as this with Single in Normal.
 // The list is a mod block, which does not honor `focus`, so it draws its own border (accent while it has the keyboard)
 export function crmuxLayout(preview) {
   return {
@@ -95,7 +98,7 @@ export function crmuxLayout(preview) {
     children: [
       { id: "header", type: "block", size: { px: 34 }, background: "chrome", window_drag: true, content: { mod: "crmux-tabs" } },
       {
-        id: "body", type: "row",
+        id: "body", type: "row", gap: 6,
         children: [
           { id: "list", type: "block", size: { px: 280 }, background: "chrome", window_drag: true, content: { mod: "crmux-list" } },
           preview,

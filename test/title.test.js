@@ -1,33 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { previewTitle, titleColorKey, titleAddress } from "../mods/crmux-title/title.js";
+import { titleColorKey, statusIndicator, titleAddress } from "../mods/crmux-title/title.js";
 
-test("preview title: card label and terminal title joined by ' - ' (crmux ui.rs format_title)", () => {
-  assert.equal(previewTitle({ selected: false, label: "2.app/main", title: "Fix the bug" }), "2.app/main - Fix the bug");
+test("name color: foreground for an ordinary agent whatever its state", () => {
+  for (const status of ["working", "blocked", "done", "idle"]) {
+    assert.equal(titleColorKey({ status, worktree: null }), "foreground");
+  }
 });
 
-test("the selected preview's title starts with '> '", () => {
-  assert.equal(previewTitle({ selected: true, label: "1.app/main", title: "Fix" }), "> 1.app/main - Fix");
-});
-
-test("no ' - ' part when the terminal title is empty", () => {
-  assert.equal(previewTitle({ selected: false, label: "1.app/main", title: "" }), "1.app/main");
-  assert.equal(previewTitle({ selected: true, label: "1.app/main", title: null }), "> 1.app/main");
-});
-
-test("without a label yet (the list has not published it), only the terminal title", () => {
-  assert.equal(previewTitle({ selected: false, label: undefined, title: "Fix" }), "Fix");
-  assert.equal(previewTitle({ selected: false, label: undefined, title: "" }), "");
-});
-
-test("color follows the state like the card title: working / blocked as is, idle and done as idle", () => {
-  assert.equal(titleColorKey({ status: "working", worktree: null }), "working");
-  assert.equal(titleColorKey({ status: "blocked", worktree: null }), "blocked");
-  assert.equal(titleColorKey({ status: "idle", worktree: null }), "idle");
-  assert.equal(titleColorKey({ status: "done", worktree: null }), "idle");
-});
-
-test("a worktree agent's title is cyan (ansi6) whatever its state", () => {
+test("a worktree agent's name is cyan (ansi6) whatever its state", () => {
   assert.equal(titleColorKey({ status: "working", worktree: "feature-x" }), "ansi6");
   assert.equal(titleColorKey({ status: "idle", worktree: "feature-x" }), "ansi6");
 });
@@ -36,6 +17,16 @@ test("an exited shell (no agent status) is muted, also in a worktree", () => {
   assert.equal(titleColorKey({ status: null, worktree: null }), "muted");
   assert.equal(titleColorKey({ status: undefined, worktree: "feature-x" }), "muted");
   assert.equal(titleColorKey({ status: "exited", worktree: "feature-x" }), "muted");
+});
+
+test("status indicator like the pane header: working / blocked / done, nothing for idle or an exited shell", () => {
+  assert.equal(statusIndicator("working"), "working");
+  assert.equal(statusIndicator("blocked"), "blocked");
+  assert.equal(statusIndicator("done"), "done");
+  assert.equal(statusIndicator("idle"), null);
+  assert.equal(statusIndicator("exited"), null);
+  assert.equal(statusIndicator(null), null);
+  assert.equal(statusIndicator(undefined), null);
 });
 
 test("address shown: the one given in props, else the list's selection, else the agent herdr focuses", () => {

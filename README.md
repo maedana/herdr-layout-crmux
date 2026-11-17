@@ -36,19 +36,23 @@ and a vim-like Normal / Insert mode.
 - The right side shows real terminals. `v` cycles the arrangement:
   MainV → Single → Grid → EvenH → EvenV → MainH (Main* put the selected agent in the main slot).
   Only the agents in the current tab are shown, numbered and navigated.
-- Each preview terminal has a title row above it, like the title crmux draws on the preview's border:
-  `> N.project/branch - title` (the card's label and the terminal title; `> ` marks the selected one) in the card's color
-  (the state's color, cyan for a worktree agent, dimmed for an exited shell). In Single it follows the selection.
+- Each preview terminal has a 30px title row above it, in the look of herdr-app's own pane header: the program's icon,
+  `N.project/branch` (the card's label; cyan for a worktree agent, dimmed for an exited shell), the terminal title (dimmed),
+  and the status on the right (a spinner while working, a "Needs you" badge while blocked, a dot when done, nothing when idle).
+  The selection is shown by the preview's border. In Single the row follows the selection.
   Click a title row to select that agent (like clicking its card; in Insert it returns to Normal first).
 
 ## Borders
 
-The list and every preview (its title row and terminal together) have a 1px border. The accent (blue) border is where the keys go:
-the list in Normal / Scroll, the selected agent's terminal in Insert. (The previews use the layout's `focus`
-border; the list is a mod block, which does not honor it, so the mod draws its own border.) In a multi-pane
-arrangement the selected preview has a light border while the list has the keyboard (so you can still see which one
-`i` will enter), and the others are gray. Clicking a preview moves the keyboard there, so it is treated as Insert: that agent
-becomes the selection (the footer shows `-- INSERT --`). Click the list or press `Esc` to go back to Normal.
+The list and every preview have a 1px border. Each preview is one rounded frame around its title row and terminal,
+like herdr-app's own panes. The accent (blue) border is where the keys go: the list in Normal / Scroll, the preview you are
+typing into in Insert. The preview frames follow the list's mode rather than the layout's `focus` border (which does not
+light up for a terminal inside the frame's column), so entering or leaving Insert, or selecting another agent in Insert,
+re-sets the layout to move the accent. The list is a mod block, which does not honor `focus` either, so it draws its own border.
+In a multi-pane arrangement the selected preview has a light border in Normal (so you can still see which one `i` will
+enter), and the others are gray. The frames stay 1px whatever their color, so nothing resizes. Clicking a preview moves the
+keyboard there, so it is treated as Insert: that agent becomes the selection (the footer shows `-- INSERT --`). Click the
+list or press `Esc` to go back to Normal.
 
 ## Keys
 

@@ -18,6 +18,7 @@
     {
       "id": "body",
       "type": "row",
+      "gap": 6,
       "children": [
         {
           "id": "list",
@@ -31,18 +32,19 @@
           "id": "preview",
           "type": "column",
           "border": { "width": 1, "color": "border" },
-          "focus": { "border": { "width": 1, "color": "accent" } },
+          "radius": 6,
+          "background": "background",
           "children": [
             {
               "id": "preview-title",
               "type": "block",
-              "size": { "px": 20 },
-              "background": "background",
+              "size": { "px": 30 },
               "content": { "mod": "crmux-title" }
             },
             {
               "id": "preview-body",
               "type": "block",
+              "radius": 5,
               "content": { "agent": "focused" }
             }
           ]
