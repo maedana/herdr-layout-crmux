@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalKey, scrollKey, scrollStep, scrollView, previewFocus, listRegained } from "../mods/crmux-list/keys.js";
+import { normalKey, scrollKey, scrollStep, scrollView, previewFocus, focusAction } from "../mods/crmux-list/keys.js";
 
 const plain = { control: false, shift: false };
 const ctrl = { control: true, shift: false };
@@ -95,28 +95,44 @@ test("view: page is the terminal's rows and max the history above one page; defa
   assert.deepEqual(scrollView(panes, "missing"), { page: 40, max: 0 });
 });
 
-// Keyboard in a preview terminal block (e.g. clicked) while the list is not focused: the preview's address, else null
+// Keyboard in a preview terminal block (e.g. clicked): the preview's address, else null
 const ADDRS = ["t1", "t2"];
 
-test("previewFocus: a layout terminal block of a listed agent holds the keyboard (list not focused) -> its address", () => {
-  assert.equal(previewFocus({ terminal: "t2", pane: null }, false, ADDRS), "t2");
+test("previewFocus: a layout terminal block of a listed agent holds the keyboard -> its address", () => {
+  assert.equal(previewFocus({ terminal: "t2", pane: null }, ADDRS), "t2");
 });
 
-test("previewFocus: null when the list is focused, nothing is focused, or the focus is a real pane", () => {
-  assert.equal(previewFocus({ terminal: "t2", pane: null }, true, ADDRS), null);
-  assert.equal(previewFocus(null, false, ADDRS), null);
-  assert.equal(previewFocus(undefined, false, ADDRS), null);
-  assert.equal(previewFocus({ terminal: "t2", pane: "p1" }, false, ADDRS), null);
+test("previewFocus: null when nothing is focused or the focus is a real pane", () => {
+  assert.equal(previewFocus(null, ADDRS), null);
+  assert.equal(previewFocus(undefined, ADDRS), null);
+  assert.equal(previewFocus({ terminal: "t2", pane: "p1" }, ADDRS), null);
 });
 
 test("previewFocus: null when the focused terminal is not in the list (e.g. another tab)", () => {
-  assert.equal(previewFocus({ terminal: "t9", pane: null }, false, ADDRS), null);
+  assert.equal(previewFocus({ terminal: "t9", pane: null }, ADDRS), null);
 });
 
-// The list holds the keyboard while it thinks it is Insert (e.g. a card was clicked): go back to Normal
-test("listRegained: true only when in Insert and the list holds the keyboard", () => {
-  assert.equal(listRegained(true, true), true);
-  assert.equal(listRegained(true, false), false);
-  assert.equal(listRegained(false, true), false);
-  assert.equal(listRegained(false, false), false);
+// What to do when the keyboard moved without the list's keys (a click): leave / enter Insert, or just move the selection
+test("focusAction: Insert while the list has the keyboard -> leave (back to Normal)", () => {
+  assert.deepEqual(focusAction({ insert: true, focusedPreview: null, listFocused: true, selected: "t1" }), { type: "leave" });
+  assert.deepEqual(focusAction({ insert: true, focusedPreview: "t2", listFocused: true, selected: "t1" }), { type: "leave" });
+});
+
+test("focusAction: Insert with the keyboard on a different listed preview -> select it", () => {
+  assert.deepEqual(focusAction({ insert: true, focusedPreview: "t2", listFocused: false, selected: "t1" }), { type: "select", address: "t2" });
+});
+
+test("focusAction: Insert on the selected preview, or the keyboard elsewhere -> nothing", () => {
+  assert.equal(focusAction({ insert: true, focusedPreview: "t1", listFocused: false, selected: "t1" }), null);
+  assert.equal(focusAction({ insert: true, focusedPreview: null, listFocused: false, selected: "t1" }), null);
+});
+
+test("focusAction: Normal with the keyboard on a listed preview (list not focused) -> enter Insert on it", () => {
+  assert.deepEqual(focusAction({ insert: false, focusedPreview: "t2", listFocused: false, selected: "t1" }), { type: "enter", address: "t2" });
+  assert.deepEqual(focusAction({ insert: false, focusedPreview: "t1", listFocused: false, selected: "t1" }), { type: "enter", address: "t1" });
+});
+
+test("focusAction: Normal while the list has the keyboard, or no listed preview has it -> nothing", () => {
+  assert.equal(focusAction({ insert: false, focusedPreview: "t2", listFocused: true, selected: "t1" }), null);
+  assert.equal(focusAction({ insert: false, focusedPreview: null, listFocused: false, selected: "t1" }), null);
 });

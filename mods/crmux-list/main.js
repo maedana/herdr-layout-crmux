@@ -17,7 +17,7 @@ import {
   markPrefix,
 } from "./tabs.js";
 import { parseNumstat, diffSummary, diffTargets, diffKey, keepRepos } from "./diff.js";
-import { normalKey, scrollKey, scrollStep, scrollView, previewFocus, listRegained } from "./keys.js";
+import { normalKey, scrollKey, scrollStep, scrollView, previewFocus, focusAction } from "./keys.js";
 
 const LAYOUT = "crmux";
 const DEFAULT_ARRANGE = "MainV";
@@ -27,7 +27,7 @@ const ESC_FORWARD_MS = 1500;
 const GG_MS = 800;
 // Delay before reclaiming the keyboard for the list after it moved to a right-side block (e.g. on selection change) (same as hop's switchTo)
 const REFOCUS_AFTER_MS = [16, 150];
-// While keepFocus reclaims the keyboard (layout.set briefly moves it to the right), a keyboard in a preview is not a click
+// While the keyboard is moved programmatically (keepFocus, i), where it is now is not a click
 const SETTLE_MS = 300;
 // Pulse for waiting-for-input / just-finished (crmux swings the border between 50-100% with sin(t*16), a period of about 0.4s)
 const PULSE = { from: 0.5, to: 1, period: 400 };
@@ -51,6 +51,8 @@ export default class CrmuxList extends View {
     // Lines the selected preview is scrolled up (Scroll mode while > 0)
     this.scrollUp = 0;
     this.tickSig = "";
+    // Whether the last render drew the list as having the keyboard (its border is accent then)
+    this.drawnFocus = false;
     // Until this time the keyboard being in a preview is not treated as a click (init also reclaims the keyboard a little later)
     this.settleUntil = Date.now() + 2 * SETTLE_MS;
     // git diff summary: diffKey(machine, cwd) -> diffSummary result (kept only inside the mod)
@@ -64,8 +66,8 @@ export default class CrmuxList extends View {
     // Focus may not take effect right after init (re-acquire a little later, as hop does), and layout() still returns the previous layout, so
     // restoring the arrangement (layout.set rewrites the file, so right after install.sh etc. it is back to Single) is also done a little later
     cx.timer.after(300, () => {
-      this.refocus();
-      this.applyLayout();
+      if (this.applyLayout()) this.reclaim();
+      else this.refocus();
     });
     // Refresh the display when elapsed time / pulse starts or ends, and re-arrange as agents come and go
     cx.timer.every(1000, (cx) => this.tick(cx));
@@ -156,7 +158,11 @@ export default class CrmuxList extends View {
   // --- Actions ---
 
   command(c) {
-    if (c === "focus") return this.refocus();
+    if (c === "focus") {
+      // pane.go moved onto the list (or a popup over it closed): take the keyboard, but not away from Insert's terminal
+      if (!this.insert) this.handle.focus();
+      return;
+    }
     if (c === "normal") {
       // The escape in keys.json for layout:crmux. If we are in the right terminal, go back to the list (Insert -> Normal).
       // This command may also arrive while in the list (Esc in Normal)
@@ -249,46 +255,29 @@ export default class CrmuxList extends View {
     this.keepFocus(() => this.applyLayout());
   }
 
-  // Build the right side from the arrangement, list, and selection, and swap it via layout.set if it differs from the current layout.
-  // The list's border is part of it: accent while the list has the keyboard (everything but Insert), plain in Insert
-  // (a mod block does not honor `focus`, so the mode drives its border). Returns whether layout.set was sent
-  applyLayout() {
+  // Build the right side from the arrangement, list (items: the current tab's, from view()), and selection, and swap it
+  // via layout.set if it differs from the current layout. Returns whether it sent layout.set (which moves the keyboard to a
+  // right-side block, so the caller reclaims it: keepFocus, or reclaim() outside it)
+  applyLayout(items = this.view().items) {
     if (shared("layout") !== LAYOUT) return false;
-    const items = this.view().items;
     const list = items.map((a) => a.address);
     const exited = items.filter((a) => a.status === "exited").map((a) => a.address);
     const want = previewTree(this.arrange(), list, this.selected(list), exited);
-    const full = crmuxLayout(want, !this.insert);
-    const current = layout();
-    if (sameTree(want, findNode(current, "preview")) && sameTree(findNode(full, "list").border, findNode(current, "list")?.border)) {
-      return false;
-    }
-    run("layout.set", { layout: full });
+    if (sameTree(want, findNode(layout(), "preview"))) return false;
+    run("layout.set", { layout: crmuxLayout(want) });
     return true;
   }
 
-  // Insert counterpart of keepFocus: layout.set may move the keyboard to some right-side block, so put it back on the
-  // terminal being typed into (immediately, and again after things settle), without reclaiming it for the list.
-  // Returns whether layout.set was sent (when it was not, the keyboard did not move and nothing is re-sent)
-  applyLayoutInInsert(address) {
-    const n = ++this.switches;
-    this.settleUntil = Date.now() + SETTLE_MS;
-    const changed = this.applyLayout();
-    if (!changed) return false;
-    run("pane.focus", { terminal: address });
-    for (const ms of REFOCUS_AFTER_MS) {
-      this.acx.timer.after(ms, () => {
-        if (n === this.switches && this.insert) run("pane.focus", { terminal: address });
-      });
-    }
-    return true;
-  }
-
-  // Selection moves and layout.set move the keyboard to a right-side block, so reclaim it for the list (immediately, and again after things settle)
+  // Selection moves and layout.set move the keyboard to a right-side block, so put it back where the mode says
   keepFocus(fn) {
+    fn();
+    this.reclaim();
+  }
+
+  // Put the keyboard back where the mode says (immediately, and again after things settle); until then where it is now is not a click
+  reclaim() {
     const n = ++this.switches;
     this.settleUntil = Date.now() + SETTLE_MS;
-    fn();
     this.refocus();
     for (const ms of REFOCUS_AFTER_MS) {
       this.acx.timer.after(ms, () => {
@@ -297,44 +286,53 @@ export default class CrmuxList extends View {
     }
   }
 
-  // Do not reclaim during Insert (typing in a right-side terminal)
+  // The list in Normal / Scroll; in Insert the selected agent's terminal being typed into
   refocus() {
-    if (!this.insert) this.handle.focus();
+    if (!this.insert) return this.handle.focus();
+    const sel = this.selected();
+    if (sel) run("pane.focus", { terminal: sel });
   }
 
-  // The keyboard is in a preview terminal block (e.g. the user clicked it) while the list thinks it is Normal: treat it as Insert and
-  // select that preview (without agent.focus / refocus: the keyboard is already where the user put it). Returns whether it switched
-  syncPreviewFocus(addresses) {
-    if (this.insert || Date.now() < this.settleUntil) return false;
-    const address = previewFocus(focused(), this.handle.is_focused(), addresses);
-    if (!address) return false;
-    const cur = this.selected(addresses);
+  // Keep the mode and selection in step with where the keyboard is when it moved without the list's keys (a click), but not
+  // while a programmatic move is settling (focusAction decides). Returns whether the mode or selection changed
+  syncFocus(addresses) {
+    if (Date.now() < this.settleUntil) return false;
+    const focusedPreview = previewFocus(focused(), addresses);
+    // is_focused() is asked only when it matters: in Insert, or once focused() points at a listed preview
+    const listFocused = (this.insert || focusedPreview !== null) && this.handle.is_focused();
+    const cur = focusedPreview ? this.selected(addresses) : null;
+    const action = focusAction({ insert: this.insert, focusedPreview, listFocused, selected: cur });
+    if (!action) return false;
+    // The list holds the keyboard while it thinks it is Insert (a card or the margin was clicked): back to Normal
+    if (action.type === "leave") return this.leaveInsert();
+    if (action.address !== cur) {
+      setShared("crmux.prev", cur);
+      setShared("crmux.selected", action.address);
+    }
+    // In Insert another preview was clicked: it is now the one being typed into, so only the selection follows
+    if (action.type === "select") return true;
+    // A preview holds it while the list thinks it is Normal (the user clicked it): Insert on that preview.
     // Like toInsert from Scroll mode, the preview goes back to the bottom
     if (this.scrolling()) this.scrollPreview(cur, "bottom");
-    if (address !== cur) {
-      setShared("crmux.prev", cur);
-      setShared("crmux.selected", address);
-    }
     this.insert = true;
-    if (shared("crmux.mode") !== "insert") setShared("crmux.mode", "insert");
-    // The list's border goes plain; the keyboard is already in the preview, but layout.set may move it, so put it back
-    this.applyLayoutInInsert(address);
+    setShared("crmux.mode", "insert");
+    // The keyboard is already there, but the new selection re-sets the layout (e.g. the main slot), which may move it
+    if (action.address !== cur) this.keepFocus(() => this.applyLayout());
     return true;
   }
 
-  // The keyboard is in the list (e.g. a card was clicked, which only focuses the list) while the list thinks it is Insert:
-  // go back to Normal. Like syncPreviewFocus, not while the keyboard is still moving. Returns whether it switched
-  syncListFocus() {
-    if (Date.now() < this.settleUntil || !listRegained(this.insert, this.handle.is_focused())) return false;
-    this.leaveInsert();
-    return true;
-  }
-
-  // Insert -> Normal: the list border turns accent and the keyboard is reclaimed for the list
+  // Insert -> Normal. Nothing to do outside Insert. Returns whether it acted (the keyboard is then reclaimed for the list)
   leaveInsert() {
+    if (!this.insert) return false;
+    this.toList();
+    return true;
+  }
+
+  // Normal, with the keyboard reclaimed for the list
+  toList() {
     this.insert = false;
     setShared("crmux.mode", "normal");
-    this.keepFocus(() => this.applyLayout());
+    this.keepFocus(() => {});
   }
 
   toInsert() {
@@ -344,12 +342,13 @@ export default class CrmuxList extends View {
     // The keyboard is still in the list until pane.focus takes effect, which is not a click
     this.settleUntil = Date.now() + SETTLE_MS;
     setShared("crmux.mode", "insert");
-    if (!this.applyLayoutInInsert(sel)) run("pane.focus", { terminal: sel });
+    run("pane.focus", { terminal: sel });
   }
 
+  // Esc from a terminal. Also from Normal while the keyboard is in a terminal anyway (a clicked preview syncFocus has not seen yet)
   toNormal() {
     this.escFromInsertAt = Date.now();
-    this.leaveInsert();
+    this.toList();
   }
 
   // Esc in Normal: right after returning from Insert, send Esc Esc to the selected agent to go back to Insert
@@ -396,7 +395,7 @@ export default class CrmuxList extends View {
     const k = e.key;
     if (m.alt || m.platform) return;
     // A key reached the list = Normal (e.g. returned by a click)
-    if (this.insert) this.leaveInsert();
+    this.leaveInsert();
     if (k !== "escape") this.escFromInsertAt = 0;
     const plainG = k === "g" && !m.shift && !m.control;
     const gg = plainG && Date.now() - this.gAt < GG_MS;
@@ -408,17 +407,21 @@ export default class CrmuxList extends View {
     cx.notify();
   }
 
-  // Every second: redraw only when the display (elapsed time, pulse presence) changed. Re-arrange as agents come and go
+  // Every second: redraw only when the display (elapsed time, pulse presence, the list's border) changed. Re-arrange as
+  // agents come and go
   tick(cx) {
-    const moved = this.syncPreviewFocus(this.addresses()) || this.syncListFocus();
-    this.applyLayout();
+    const { items } = this.view();
+    const moved = this.syncFocus(items.map((a) => a.address));
+    // Agents came or went: layout.set moved the keyboard, so reclaim it (only then, not every second)
+    if (this.applyLayout(items)) this.reclaim();
     const now = Date.now();
     const records = shared("crmux.records") ?? {};
     const sig = Object.entries(records).map(([a, r]) => {
       const secs = (now - r.since) / 1000;
       return `${a}:${formatElapsed(secs)}:${shouldPulse(r.kind, Math.floor(secs), r.hasWorked)}`;
     }).join("|");
-    if (sig === this.tickSig && !moved) return;
+    // A focus change does not necessarily render, so redraw the border when it went stale
+    if (sig === this.tickSig && !moved && this.handle.is_focused() === this.drawnFocus) return;
     this.tickSig = sig;
     cx.notify();
   }
@@ -512,10 +515,9 @@ export default class CrmuxList extends View {
       .cursor_pointer()
       .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
       .on_click((_e, cx) => {
-        // Leave Insert before selecting: in Insert, keepFocus does not reclaim the keyboard that select's layout.set
-        // moves to the preview, so the list would never get it back
-        if (this.insert) this.leaveInsert();
-        this.handle.focus();
+        // Leave Insert before selecting: in Insert, keepFocus puts the keyboard back in the terminal, not the list
+        // (leaving Insert already reclaims the keyboard for the list)
+        if (!this.leaveInsert()) this.handle.focus();
         this.select(a.address);
         cx.notify();
       })
@@ -541,8 +543,7 @@ export default class CrmuxList extends View {
     const v = this.view();
     const { items, marks } = v;
     const list = items.map((a) => a.address);
-    this.syncPreviewFocus(list);
-    this.syncListFocus();
+    this.syncFocus(list);
     const sel = this.selected(list);
     // Clean up state-transition records and marks using all agents before filtering (so filtering does not drop records)
     const records = this.records(v.all);
@@ -557,13 +558,15 @@ export default class CrmuxList extends View {
       this.scrolledTo = listAt;
       this.scroll.scroll_to_item(at);
     }
+    // A mod block does not honor the layout's `focus` border, so the list draws its own: accent while it has the keyboard
+    this.drawnFocus = this.handle.is_focused();
     return v_flex().id("crmux-list").track_focus(this.handle).size_full().min_h(0)
+      .border_1().border_color(this.drawnFocus ? t.accent ?? t.foreground : t.border ?? t.muted)
       .font_family(settings().font_family ?? "JetBrains Mono").text_size(12)
       .on_key_down((e, cx) => this.onKey(e, cx))
       .on_mouse_down("left", (_e, cx) => {
         // A click on the list's margin also returns to Normal (window_drag still works as is)
-        if (this.insert) this.leaveInsert();
-        else this.handle.focus();
+        if (!this.leaveInsert()) this.handle.focus();
         cx.notify();
       })
       .child(v_flex().id("crmux-cards").flex_1().min_h(0).p(8).gap(6).overflow_y_scrollbar().track_scroll(this.scroll)

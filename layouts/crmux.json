@@ -25,7 +25,6 @@
           "size": { "px": 280 },
           "background": "chrome",
           "window_drag": true,
-          "border": { "width": 1, "color": "accent" },
           "content": { "mod": "crmux-list" }
         },
         {

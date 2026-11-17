@@ -12,10 +12,9 @@ test("the next of an unknown arrangement is MainV (crmux's default)", () => {
   assert.equal(nextArrange(undefined), "MainV");
 });
 
-// Every keyboard-receiving area (list, preview) has a border that turns accent while the keyboard is inside it
+// Every preview block has a border that turns accent while the keyboard is inside it (the list draws its own border)
 const FOCUS = { border: { width: 1, color: "accent" } };
 const BORDER = { width: 1, color: "border" };
-const ACCENT = { width: 1, color: "accent" };
 const FOCUSED = { id: "preview", type: "block", border: BORDER, focus: FOCUS, content: { agent: "focused" } };
 
 test("Single is one agent block (selection is switched with agent.focus)", () => {
@@ -120,34 +119,11 @@ test("whole layout: root is a column: header (tab bar) on top, body (list on the
   });
   assert.equal(body.type, "row");
   assert.deepEqual(body.children[0].content, { mod: "crmux-list" });
-  assert.deepEqual(body.children[0].border, ACCENT);
+  // A mod block does not honor `focus`, so the list draws its own border (accent while it has the keyboard)
+  assert.equal("border" in body.children[0], false);
   assert.equal("focus" in body.children[0], false);
   assert.equal(body.children[1], preview);
   assert.deepEqual(footer.content, { mod: "crmux-footer" });
-});
-
-// A mod block does not honor `focus`, so the list's border color is driven by the mode through layout.set (width stays 1)
-test("crmuxLayout: the list border is accent while the list has the keyboard, plain otherwise, and never has a focus property", () => {
-  const preview = previewTree("Single", [], null);
-  const list = (root) => findNode(root, "list");
-  assert.deepEqual(list(crmuxLayout(preview, true)).border, ACCENT);
-  assert.deepEqual(list(crmuxLayout(preview, false)).border, BORDER);
-  assert.equal("focus" in list(crmuxLayout(preview, true)), false);
-  assert.equal("focus" in list(crmuxLayout(preview, false)), false);
-});
-
-test("crmuxLayout: the list is focused by default", () => {
-  const preview = previewTree("Single", [], null);
-  assert.deepEqual(crmuxLayout(preview), crmuxLayout(preview, true));
-});
-
-test("crmuxLayout: only the list border differs between listFocused true and false (preview keeps its border + focus)", () => {
-  const preview = previewTree("EvenH", ["t1", "t2"], "t1");
-  const a = crmuxLayout(preview, true);
-  const b = crmuxLayout(preview, false);
-  findNode(a, "list").border = BORDER;
-  assert.deepEqual(a, b);
-  assert.deepEqual(findNode(b, "pv-t1").focus, FOCUS);
 });
 
 test("layouts/crmux.json (the initial layout) is the same as Single's crmuxLayout", async () => {
