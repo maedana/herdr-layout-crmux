@@ -10,7 +10,7 @@
     {
       "id": "header",
       "type": "block",
-      "size": { "px": 28 },
+      "size": { "px": 34 },
       "background": "chrome",
       "window_drag": true,
       "content": { "mod": "crmux-tabs" }

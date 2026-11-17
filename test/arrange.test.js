@@ -115,7 +115,7 @@ test("whole layout: root is a column: header (tab bar) on top, body (list on the
   assert.deepEqual(root.children.map((c) => c.id), ["header", "body", "footer"]);
   const [header, body, footer] = root.children;
   assert.deepEqual(header, {
-    id: "header", type: "block", size: { px: 28 }, background: "chrome", window_drag: true, content: { mod: "crmux-tabs" },
+    id: "header", type: "block", size: { px: 34 }, background: "chrome", window_drag: true, content: { mod: "crmux-tabs" },
   });
   assert.equal(body.type, "row");
   assert.deepEqual(body.children[0].content, { mod: "crmux-list" });

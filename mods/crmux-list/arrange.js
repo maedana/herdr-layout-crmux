@@ -79,7 +79,7 @@ export function crmuxLayout(preview) {
     id: "root", type: "column", titlebar: "none", traffic_lights: [12, 16],
     background: "canvas", terminal_padding: [14, 12], divider: { width: 1, color: "border" },
     children: [
-      { id: "header", type: "block", size: { px: 28 }, background: "chrome", window_drag: true, content: { mod: "crmux-tabs" } },
+      { id: "header", type: "block", size: { px: 34 }, background: "chrome", window_drag: true, content: { mod: "crmux-tabs" } },
       {
         id: "body", type: "row",
         children: [
