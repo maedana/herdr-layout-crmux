@@ -96,9 +96,14 @@ are bound to `crmux-list.go-left` etc. in the `keys.json` entries below; other k
 to the one being typed into (it is selected in place and stays Insert), and going left from the leftmost one (or in Single)
 returns to the list (Normal). In Normal, right enters the selected preview (like `i`).
 
+Opening a shell with the main layout's keys, in Normal and Insert alike, for the selected one (the preview being typed into
+in Insert): `ctrl-t c` opens it in a new background tab (like `n`), `ctrl-t v` / `ctrl-t -` split the pane it is in, in the
+tab it came from, to the right / below (`pane.split` with that pane named, since a layout terminal block has no pane of its
+own). The new shell is then selected and Insert entered.
+
 The same actions can be run from a shell while the layout is shown, e.g.
 `herdr-app do crmux-list.arrange`, `crmux-list.down`, `crmux-list.select-2`, `crmux-list.normal`,
-`crmux-list.mark`, `crmux-list.tab-next`, `crmux-list.tab-prev`, `crmux-list.tab-<n>` (0 = the first tab; what a tab click sends), `crmux-list.scroll-up`, `crmux-list.line-down`, `crmux-list.close`, `crmux-list.shell`, `crmux-list.go-left` (`-right`, `-up`, `-down`).
+`crmux-list.mark`, `crmux-list.tab-next`, `crmux-list.tab-prev`, `crmux-list.tab-<n>` (0 = the first tab; what a tab click sends), `crmux-list.scroll-up`, `crmux-list.line-down`, `crmux-list.close`, `crmux-list.shell`, `crmux-list.go-left` (`-right`, `-up`, `-down`), `crmux-list.split-right` (`-down`).
 
 ## Install
 
@@ -119,7 +124,10 @@ Add to `~/.config/herdr-app/keys.json`:
     "ctrl-t h": "crmux-list.go-left",
     "ctrl-t j": "crmux-list.go-down",
     "ctrl-t k": "crmux-list.go-up",
-    "ctrl-t l": "crmux-list.go-right"
+    "ctrl-t l": "crmux-list.go-right",
+    "ctrl-t c": "crmux-list.shell",
+    "ctrl-t v": "crmux-list.split-right",
+    "ctrl-t -": "crmux-list.split-down"
   }
 }
 ```

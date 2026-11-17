@@ -9,7 +9,7 @@ import {
 } from "herdr";
 import {
   formatElapsed, shouldPulse, trackStatuses, statusKind, statusIcon, projectName, parseRepo, sortByProject, cardLabel, cycle,
-  pickSelected, nextSelection, exitedTerminals, closable, neighbour, previewLabels, findNewShell,
+  pickSelected, nextSelection, exitedTerminals, closable, neighbour, previewLabels, findNewShell, shellCommand,
 } from "./cards.js";
 import { nextArrange, previewTree, crmuxLayout, findNode, sameTree, goTarget } from "./arrange.js";
 import {
@@ -32,7 +32,7 @@ const SETTLE_MS = 300;
 // Pulse for waiting-for-input / just-finished (crmux swings the border between 50-100% with sin(t*16), a period of about 0.4s)
 const PULSE = { from: 0.5, to: 1, period: 400 };
 const EMOJI_FONT = "Noto Color Emoji";
-// How long n waits for the shell it opened to show up before giving up on selecting it
+// How long openShell (n, ctrl-t c / v / -) waits for the shell it opened to show up before giving up on selecting it
 const NEW_SHELL_MS = 10000;
 // Size of the program icon before a card's label (the preview's title row uses 14 for 12px text)
 const ICON_PX = 14;
@@ -62,7 +62,7 @@ export default class CrmuxList extends View {
     // git diff summary: diffKey(machine, cwd) -> diffSummary result (kept only inside the mod)
     this.diffs = {};
     this.diffSig = "";
-    // The shell n opened, until it shows up in the list: { space, known, until } (see findNewShell)
+    // The shell openShell opened, until it shows up in the list: { space, known, until } (see findNewShell)
     this.pendingShell = null;
     if (checking()) return;
 
@@ -200,6 +200,8 @@ export default class CrmuxList extends View {
     const pick = /^pick-(.+)$/.exec(name);
     // go-<direction>: the main layout's pane keys (alt-h/j/k/l, ctrl-t h/j/k/l), bound for layout:crmux in keys.json
     const go = /^go-(left|right|up|down)$/.exec(name);
+    // split-<direction>: the main layout's ctrl-t v / ctrl-t - (pane.split), bound for layout:crmux in keys.json
+    const split = /^split-(right|down)$/.exec(name);
     // Leaving Scroll mode with i puts the preview back at the bottom (crmux reset_preview_scroll)
     if (name === "insert" && this.scrolling()) this.scrollPreview(sel, "bottom");
     if (name === "down") this.select(list[cycle(at, 1, list.length)], v.items);
@@ -216,7 +218,8 @@ export default class CrmuxList extends View {
     else if (name === "tab-prev") this.switchTab(-1, sel);
     else if (tabNo) this.clickTab(v.tabs[Number(tabNo[1])], sel);
     else if (name === "close") this.closeExited(sel, list);
-    else if (name === "shell") this.openShell(sel, v.all);
+    else if (name === "shell") this.openShell("tab", sel, v.all);
+    else if (split) this.openShell(split[1], sel, v.all);
     else if (pick) this.pick(pick[1], v.items);
     else if (go) this.go(go[1], sel, v.items);
   }
@@ -282,18 +285,20 @@ export default class CrmuxList extends View {
     this.focusAgent(next);
   }
 
-  // n: open a plain shell in a new background tab of the selected one's space, starting in its folder (to start a server
-  // or run a command outside the agents). tab.new gives no address back, so tick picks the shell up when it shows up
-  // (adoptNewShell), selects it and enters Insert. With nothing selected it opens in the shown space
-  openShell(sel, all) {
-    const a = all.find((i) => i.address === sel);
-    const space = a?.space ?? focused()?.space;
-    if (!space) return;
+  // A new plain shell for the selected one (to start a server or run a command outside the agents). how: "tab" (n / ctrl-t c:
+  // a background tab in its space, in its folder) or "right" / "down" (ctrl-t v / ctrl-t -: split the pane it is in, in the
+  // tab it came from). The app gives no address back, so tick picks the shell up when it shows up in that space
+  // (adoptNewShell), selects it and enters Insert
+  openShell(how, sel, all) {
+    const a = all.find((i) => i.address === sel) ?? null;
+    const cmd = shellCommand(how, a, focused()?.space ?? null);
+    if (!cmd) return;
+    const space = a?.space ?? cmd.args.space;
     this.pendingShell = { space, known: all.map((i) => i.address), until: Date.now() + NEW_SHELL_MS };
-    run("tab.new", { space, ...(a?.cwd ? { folder: a.cwd } : {}), focus: false });
+    run(cmd.name, cmd.args);
   }
 
-  // The shell n opened has shown up: select it and type into it. Returns whether it acted (it has re-laid out then).
+  // The shell openShell opened has shown up: select it and type into it. Returns whether it acted (it has re-laid out then).
   // Given up after NEW_SHELL_MS, and when it is not in the current tab (e.g. Marked) it is only listed, not selected
   adoptNewShell() {
     if (!this.pendingShell) return false;

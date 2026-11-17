@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatElapsed, statusKind, shouldPulse, trackStatuses, projectName, parseRepo, sortByProject, cardLabel, previewLabels, statusIcon, cycle, pickSelected, nextSelection, exitedTerminals, closable, neighbour, findNewShell } from "../mods/crmux-list/cards.js";
+import { formatElapsed, statusKind, shouldPulse, trackStatuses, projectName, parseRepo, sortByProject, cardLabel, previewLabels, statusIcon, cycle, pickSelected, nextSelection, exitedTerminals, closable, neighbour, findNewShell, shellCommand } from "../mods/crmux-list/cards.js";
 
 test("under 60 seconds is shown as seconds, right-aligned to 2 digits", () => {
   assert.equal(formatElapsed(5), " 5s");
@@ -351,4 +351,27 @@ test("new shell: none yet (still starting, or only agents / other spaces are new
   const items = [shellItem("t1"), { address: "t2", status: "working", space: "s1" }, shellItem("t3", { space: "s2" })];
   assert.equal(findNewShell({ space: "s1", known: ["t1"] }, items), null);
   assert.equal(findNewShell(null, items), null);
+});
+
+// How a new shell is opened for the selected card (n / ctrl-t c: a background tab in its space, in its folder; ctrl-t v /
+// ctrl-t -: a split of the pane it is in, like the main layout's pane.split, which needs the pane named from a layout block)
+const card = { address: "t3", pane: "p3", space: "s1", cwd: "/w/app" };
+
+test("shell command: a tab opens in the card's space and folder, in the background", () => {
+  assert.deepEqual(shellCommand("tab", card), { name: "tab.new", args: { space: "s1", folder: "/w/app", focus: false } });
+});
+
+test("shell command: a tab without a known folder leaves folder out; with no card it opens in the shown space", () => {
+  assert.deepEqual(shellCommand("tab", { ...card, cwd: null }), { name: "tab.new", args: { space: "s1", focus: false } });
+  assert.deepEqual(shellCommand("tab", null, "s9"), { name: "tab.new", args: { space: "s9", focus: false } });
+});
+
+test("shell command: a split names the card's pane and the direction", () => {
+  assert.deepEqual(shellCommand("right", card), { name: "pane.split", args: { pane: "p3", direction: "right" } });
+  assert.deepEqual(shellCommand("down", card), { name: "pane.split", args: { pane: "p3", direction: "down" } });
+});
+
+test("shell command: nothing to split without a card, nothing at all without a space", () => {
+  assert.equal(shellCommand("right", null, "s9"), null);
+  assert.equal(shellCommand("tab", null, null), null);
 });

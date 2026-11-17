@@ -37,6 +37,19 @@ export function findNewShell(pending, items) {
   return items.find((a) => a.status === "exited" && a.space === pending.space && !known.has(a.address))?.address ?? null;
 }
 
+// The app command that opens a new shell for card (the selected one; null when there is none). how: "tab" (n / ctrl-t c: a
+// background tab in its space, starting in its folder; with no card, in shownSpace) or "right" / "down" (ctrl-t v / ctrl-t -:
+// split the pane it is in; a layout terminal block has no pane of its own, so the pane is named). null when there is nothing
+// to open it in
+export function shellCommand(how, card, shownSpace = null) {
+  if (how === "right" || how === "down") {
+    return card?.pane ? { name: "pane.split", args: { pane: card.pane, direction: how } } : null;
+  }
+  const space = card?.space ?? shownSpace;
+  if (!space) return null;
+  return { name: "tab.new", args: { space, ...(card?.cwd ? { folder: card.cwd } : {}), focus: false } };
+}
+
 // Like crmux (ui.rs should_pulse), the completion pulse runs only 5-15 seconds after a working period
 export const PULSE_FROM_SECS = 5;
 export const PULSE_UNTIL_SECS = 15;
